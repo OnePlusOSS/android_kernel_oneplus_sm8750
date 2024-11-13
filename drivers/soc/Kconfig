@@ -32,4 +32,55 @@ source "drivers/soc/ux500/Kconfig"
 source "drivers/soc/versatile/Kconfig"
 source "drivers/soc/xilinx/Kconfig"
 
+#ifdef OPLUS_FEATURE_MM_FEEDBACK
+source "drivers/soc/oplus/multimedia/Kconfig"
+#endif /* OPLUS_FEATURE_MM_FEEDBACK */
+
+#ifdef OPLUS_TRACKPOINT_REPORT
+source "drivers/soc/oplus/trackpoint/Kconfig"
+#endif /* OPLUS_TRACKPOINT_REPORT */
+
+#ifdef OPLUS_FEATURE_BOOT
+source "drivers/soc/oplus/boot/Kconfig"
+#endif /* OPLUS_FEATURE_BOOT */
+
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+source "drivers/soc/oplus/mdmrst/Kconfig"
+#endif /*OPLUS_FEATURE_MODEM_MINIDUMP*/
+
+#ifdef OPLUS_FEATURE_TP_BASIC
+source "drivers/soc/oplus/device_info/Kconfig"
+#endif /* OPLUS_FEATURE_TP_BASIC */
+#ifdef OPLUS_FEATURE_QCOM_WATCHDOG
+source "drivers/soc/oplus/boot/qcom_watchdog/Kconfig"
+#endif
+
+#ifdef OPLUS_UFS_DRIVER
+source "drivers/soc/oplus/storage/common/ufs_oplus_dbg/Kconfig"
+source "drivers/soc/oplus/storage/common/oplus_uprobe/Kconfig"
+source "drivers/soc/oplus/storage/common/storage_log/Kconfig"
+source "drivers/soc/oplus/storage/common/oplus_f2fslog_storage/Kconfig"
+source "drivers/soc/oplus/storage/common/wq_dynamic_priority/Kconfig"
+#endif
+
+#ifdef CONFIG_OPLUS_FEATURE_STORAGE_IO_METRICS
+source "drivers/soc/oplus/storage/common/io_metrics/Kconfig"
+#endif
+
+#ifdef OPLUS_FEATURE_DFT
+source "drivers/soc/oplus/dft/Kconfig"
+#endif /* OPLUS_FEATURE_DFT */
+
+#ifdef OPLUS_SUBSYS_SLEEP_MONITOR
+source "drivers/soc/oplus/power/subsys_sleep_monitor/Kconfig"
+#endif /* OPLUS_SUBSYS_SLEEP_MONITOR */
+
+#ifdef OPLUS_FEATURE_WAKER_IDENTIFY
+source "kernel/oplus_cpu/waker_identify/Kconfig"
+#endif /* OPLUS_FEATURE_WAKER_IDENTIFY */
+
+#ifdef OPLUS_FEATURE_FPGA
+source "drivers/soc/oplus/fpga_notify/Kconfig"
+#endif /* OPLUS_FEATURE_FPGA */
 endmenu

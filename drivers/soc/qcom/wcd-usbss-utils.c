@@ -7,6 +7,10 @@
 #include <linux/soc/qcom/wcd939x-i2c.h>
 #include "wcd-usbss-priv.h"
 
+//#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+//#endif /*CONFIG_OPLUS_FEATURE_MM_FEEDBACK*/
+
 #define REG_BYTES 2
 #define VAL_BYTES 1
 #define PAGE_REG_ADDR 0x00
@@ -42,6 +46,10 @@ static int wcd_usbss_i2c_write_device(struct wcd_usbss_ctxt *ctxt, u16 reg, u8 *
 		ret = i2c_transfer(client->adapter, xfer_msg, 1);
 		if (ret != 1) {
 			pr_err("failed to write the device\n");
+//#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+			mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_HEADSET_DET, MM_FB_KEY_RATELIMIT_5MIN, \
+				"payload@@failed to write wcd usbss register %d", ret);
+//#endif /*CONFIG_OPLUS_FEATURE_MM_FEEDBACK*/
 			goto fail;
 		}
 	}
@@ -86,6 +94,10 @@ static int wcd_usbss_i2c_read_device(struct wcd_usbss_ctxt *ctxt, unsigned short
 			ret = i2c_transfer(client->adapter, xfer_msg, 2);
 			if (ret != 2) {
 				pr_err("failed to read wcd usbss register\n");
+//#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+				mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_HEADSET_DET, MM_FB_KEY_RATELIMIT_5MIN, \
+					"payload@@failed to read wcd usbss register %d", ret);
+//#endif /*CONFIG_OPLUS_FEATURE_MM_FEEDBACK*/
 				return ret;
 			}
 		}

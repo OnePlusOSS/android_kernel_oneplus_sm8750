@@ -160,3 +160,7 @@ $(obj)/kheaders_data.tar.xz: FORCE
 	$(call cmd,genikh)
 
 clean-files := kheaders_data.tar.xz kheaders.md5
+
+#ifdef OPLUS_FEATURE_CPU
+obj-$(CONFIG_OPLUS_FEATURE_CPU) += oplus_cpu/
+#endif /* OPLUS_FEATURE_CPU */

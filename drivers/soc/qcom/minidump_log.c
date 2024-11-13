@@ -1264,8 +1264,9 @@ static int md_module_process(struct module *mod)
 
 	if (md_mod_info_seq_buf) {
 		base_addr = (unsigned long)mod->mem[MOD_TEXT].base;
-		seq_buf_printf(md_mod_info_seq_buf, "name: %s, base: %lx",
-				mod->name, base_addr);
+		seq_buf_printf(md_mod_info_seq_buf, "name: %s, base: %lx, nplt: %d", mod->name, base_addr,
+			mod->arch.core.plt_max_entries + 1 + NR_FTRACE_PLTS);
+
 		if (is_key_module) {
 			dump_start = (unsigned long)mod->mem[MOD_DATA].base;
 			dump_end = dump_start + mod->mem[MOD_DATA].size;

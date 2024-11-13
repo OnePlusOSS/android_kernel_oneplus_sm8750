@@ -22,9 +22,185 @@
 #include "qcom_common.h"
 #include "qcom_q6v5.h"
 #include <trace/events/rproc_qcom.h>
+#include <linux/clk.h>
+#include <linux/firmware.h>
+#include <linux/of_address.h>
+#include <linux/of_device.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
+/*#include <linux/qcom_scm.h>*/
+#include <linux/regulator/consumer.h>
+#include <linux/interconnect.h>
+#include <linux/soc/qcom/mdt_loader.h>
+#include <linux/soc/qcom/qcom_aoss.h>
+#include "qcom_pil_info.h"
+#include "remoteproc_internal.h"
 
 #define Q6V5_LOAD_STATE_MSG_LEN	64
 #define Q6V5_PANIC_DELAY_MS	200
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+#include <soc/oplus/system/oplus_mm_kevent_fb.h>
+#define REMOTEPROC_ADSP "remoteproc-adsp"
+#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+#define MAX_REASON_LEN 300
+#define MAX_DEVICE_NAME 32
+struct dev_crash_report_work {
+	struct work_struct  work;
+	struct device *crash_dev;
+	char   device_name[MAX_DEVICE_NAME];
+	char   crash_reason[MAX_REASON_LEN];
+};
+
+static struct workqueue_struct *crash_report_workqueue = NULL;
+#endif
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+//Add for customized subsystem ramdump to skip generate dump cause by SAU
+#define MAX_SSR_REASON_LEN	256U
+#define MAX_SSR_DEFAULT_REASON_LEN 16
+#define REMOTEPROC_MSS "remoteproc-mss"
+extern bool SKIP_GENERATE_RAMDUMP;
+extern void mdmreason_set(char * buf);
+#endif
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+unsigned int getBKDRHash(char *str, unsigned int len)
+{
+	unsigned int seed = 131; /* 31 131 1313 13131 131313 etc.. */
+	unsigned int hash = 0;
+	unsigned int i    = 0;
+	if (str == NULL) {
+		return 0;
+	}
+	for(i = 0; i < len; str++, i++) {
+		hash = (hash * seed) + (*str);
+	}
+	return hash;
+}
+EXPORT_SYMBOL(getBKDRHash);
+
+static void __modem_send_uevent(struct device *dev, char *reason)
+{
+	int ret_val;
+	char modem_event[] = "MODEM_EVENT=modem_failure";
+	char modem_reason[MAX_REASON_LEN] = {0};
+	char modem_hashreason[MAX_REASON_LEN] = {0};
+	char *envp[4];
+	unsigned int hashid = 0;
+
+	envp[0] = (char *)&modem_event;
+	if (reason && reason[0]) {
+		snprintf(modem_reason, sizeof(modem_reason), "MODEM_REASON=%s", reason);
+	} else {
+	    snprintf(modem_reason, sizeof(modem_reason), "MODEM_REASON=unkown");
+	}
+	modem_reason[MAX_REASON_LEN - 1] = 0;
+	envp[1] = (char *)&modem_reason;
+
+	hashid = getBKDRHash(reason, strlen(reason));
+	snprintf(modem_hashreason, sizeof(modem_hashreason), "MODEM_HASH_REASON=fid:%u;cause:%s", hashid, reason);
+	modem_hashreason[MAX_REASON_LEN - 1] = 0;
+	pr_info("__subsystem_send_uevent: modem_hashreason: %s\n", modem_hashreason);
+	envp[2] = (char *)&modem_hashreason;
+
+	envp[3] = 0;
+
+	if (dev) {
+		ret_val = kobject_uevent_env(&(dev->kobj), KOBJ_CHANGE, envp);
+		if (!ret_val) {
+			pr_info("modem crash:kobject_uevent_env success!\n");
+		} else {
+			pr_info("modem crash:kobject_uevent_env fail,error=%d!\n", ret_val);
+		}
+	}
+
+	return;
+}
+
+void __adsp_send_uevent(struct device *dev, char *reason)
+{
+	int ret_val;
+	char adsp_event[] = "ADSP_EVENT=adsp_crash";
+	char adsp_reason[MAX_REASON_LEN] = {0};
+	char *envp[3];
+
+	envp[0] = (char *)&adsp_event;
+	if (reason && reason[0]) {
+		snprintf(adsp_reason, sizeof(adsp_reason), "ADSP_REASON=%s", reason);
+	} else {
+	    snprintf(adsp_reason, sizeof(adsp_reason), "ADSP_REASON=unkown");
+	}
+	adsp_reason[MAX_REASON_LEN - 1] = 0;
+	envp[1] = (char *)&adsp_reason;
+	envp[2] = 0;
+
+	if (dev) {
+		ret_val = kobject_uevent_env(&(dev->kobj), KOBJ_CHANGE, envp);
+		if (!ret_val) {
+			pr_info("adsp_crash:kobject_uevent_env success!\n");
+		} else {
+			pr_info("adsp_crash:kobject_uevent_env fail,error=%d!\n", ret_val);
+		}
+	}
+}
+
+static void subsystem_send_uevent(struct work_struct *wk)
+{
+	struct dev_crash_report_work  *crash_report_wk = container_of(wk, struct dev_crash_report_work, work);
+	char *device_name = crash_report_wk->device_name;
+
+	pr_info("[crash_log]: %s to send crash_uevnet\n", device_name);
+	if (crash_report_wk && crash_report_wk->crash_dev) {
+		if (strstr(device_name, REMOTEPROC_MSS)) {
+			__modem_send_uevent(crash_report_wk->crash_dev, (char*)&crash_report_wk->crash_reason);
+			pr_info("[crash_log]: %s send crash_uevnet\n", device_name);
+		}
+		else if (strstr(device_name, REMOTEPROC_ADSP)) {
+			__adsp_send_uevent(crash_report_wk->crash_dev, (char*)&crash_report_wk->crash_reason);
+		}
+	}
+
+	kfree(crash_report_wk);
+
+	return;
+}
+
+void subsystem_schedule_crash_uevent_work(struct device *dev, const char *device_name, char *reason)
+{
+	struct dev_crash_report_work *crash_report_wk;
+
+	if (!device_name) {
+		return;
+	}
+
+	crash_report_wk = (struct dev_crash_report_work*)kzalloc(sizeof(struct dev_crash_report_work), GFP_ATOMIC);
+	if (crash_report_wk == NULL) {
+		printk("alloc dev_crash_report_work fail\n");
+		return;
+	}
+	INIT_WORK(&(crash_report_wk->work), subsystem_send_uevent);
+	crash_report_wk->crash_dev = dev;
+	strlcpy((char*)&crash_report_wk->device_name, device_name, sizeof(crash_report_wk->device_name));
+	if (reason) {
+		strlcpy((char*)&crash_report_wk->crash_reason, reason, sizeof(crash_report_wk->crash_reason));
+	}
+
+	if (crash_report_workqueue) {
+		printk("\n");
+		pr_info("[crash_log]: queue_work crash_report_workqueue(%s)  \n", device_name);
+		queue_work(crash_report_workqueue, &(crash_report_wk->work));
+	} else {
+		kfree(crash_report_wk);
+	}
+
+	return;
+}
+EXPORT_SYMBOL(subsystem_schedule_crash_uevent_work);
+#endif
+
 
 static int q6v5_load_state_toggle(struct qcom_q6v5 *q6v5, bool enable)
 {
@@ -105,6 +281,12 @@ static void qcom_q6v5_crash_handler_work(struct work_struct *work)
 	struct rproc *rproc = q6v5->rproc;
 	struct rproc_subdev *subdev;
 	int votes;
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	size_t len = 0;
+	char *msg = NULL;
+	char reason[MAX_SSR_REASON_LEN];
+	const char *defaultMsg = "Unknown reason!";
+#endif /* OPLUS_FEATURE_MODEM_MINIDUMP */
 
 	mutex_lock(&rproc->lock);
 	votes = atomic_read(&rproc->power);
@@ -126,7 +308,27 @@ static void qcom_q6v5_crash_handler_work(struct work_struct *work)
 	 * sync() and fclose() on attempting the dump.
 	 */
 	msleep(100);
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	if (strstr(q6v5->rproc->name, REMOTEPROC_MSS)) {
+		dev_err(q6v5->dev, "remoteproc %s crashed\n", q6v5->rproc->name);
+		msg = qcom_smem_get(QCOM_SMEM_HOST_ANY, q6v5->crash_reason, &len);
+		if (msg != NULL) {
+			memset(reason, 0, sizeof(reason));
+			strlcpy(reason, msg, min(len, (size_t)MAX_SSR_REASON_LEN));
+			dev_err(q6v5->dev, "remoteproc crashed reason: %s\n", reason);
+		} else {
+			dev_err(q6v5->dev, "Can not get crash reason from smem");
+			memset(reason, 0, sizeof(reason));
+			strlcpy(reason, defaultMsg, MAX_SSR_DEFAULT_REASON_LEN);
+		}
+		panic("Panicking, remoteproc %s crashed reason: %s\n", q6v5->rproc->name, reason);
+	} else {
+		panic("Panicking, remoteproc %s crashed\n", q6v5->rproc->name);
+	}
+#else /* OPLUS_FEATURE_MODEM_MINIDUMP */
 	panic("Panicking, remoteproc %s crashed\n", q6v5->rproc->name);
+#endif /* OPLUS_FEATURE_MODEM_MINIDUMP */
+
 }
 
 static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
@@ -134,6 +336,10 @@ static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
 	struct qcom_q6v5 *q6v5 = data;
 	size_t len;
 	char *msg;
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	char reason[MAX_SSR_REASON_LEN];
+	const char *name =	q6v5->rproc->name;
+#endif
 
 	/* Sometimes the stop triggers a watchdog rather than a stop-ack */
 	if (!q6v5->running) {
@@ -153,22 +359,76 @@ static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
 	else
 		dev_err(q6v5->dev, "watchdog without message\n");
 
+	q6v5->running = false;
+
+	if (q6v5->ssr_subdev)
+		qcom_notify_early_ssr_clients(q6v5->ssr_subdev);
+
+	if (q6v5->rproc->recovery_disabled)
+		panic("Panicking, remoteproc %s crashed reason: %s\n", q6v5->rproc->name, msg);
+	else
+		rproc_report_crash(q6v5->rproc, RPROC_WATCHDOG);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+	if (strstr(q6v5->rproc->name, REMOTEPROC_ADSP)) {
+		if (!IS_ERR(msg) && len > 0 && msg[0]) {
+			if (strstr(msg, "err_inject_crash")) {
+				//Via Diag trigger adsp crash reported to the 10050 event
+				mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_ADSP_DAEMON, \
+					MM_FB_KEY_RATELIMIT_5MIN, "FieldData@@%s$$detailData@@audio$$module@@adsp", msg);
+			} else {
+				mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_ADSP_CRASH, \
+					MM_FB_KEY_RATELIMIT_5MIN, "FieldData@@%s$$detailData@@audio$$module@@adsp", msg);
+			}
+		} else {
+			mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_ADSP_CRASH, \
+				MM_FB_KEY_RATELIMIT_5MIN, "FieldData@@watchdog without message$$detailData@@audio$$module@@adsp");
+		}
+	}
+#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	if (!IS_ERR(msg) && len > 0 && msg[0]) {
+		strlcpy(reason, msg, min(len, (size_t)MAX_SSR_REASON_LEN));
+		dev_err(q6v5->dev, "%s subsystem failure reason: %s.\n", name, reason);
+		//Add for customized subsystem ramdump to skip generate dump cause by SAU
+		if (strstr(name, REMOTEPROC_MSS)) {
+			mdmreason_set(reason);
+			dev_err(q6v5->dev, "debug modem subsystem failure reason: %s.\n", reason);
+			if (strstr(reason, "OPLUS_MODEM_NO_RAMDUMP_EXPECTED") || strstr(reason, "oplusmsg:go_to_error_fatal")) {
+				dev_err(q6v5->dev, "%s will subsys reset", __func__);
+				SKIP_GENERATE_RAMDUMP = true;
+			}
+			#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+			dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work1!\n", name);
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
+			#endif
+		}
+
+		if (strstr(name, REMOTEPROC_ADSP)) {
+			dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work2!\n", name);
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
+		}
+	}
+	else {
+		dev_err(q6v5->dev, "%s SFR: (unknown, empty string found).\n", name);
+		if (strstr(name, REMOTEPROC_ADSP) || strstr(name, REMOTEPROC_MSS)) {
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, 0);
+		}
+	}
+#endif
+
+	dev_err(q6v5->dev, "return watchdog IRQ_HANDLED at cycle:%llu, crash_stack state: %s\n",
+		get_cycles(),
+		q6v5->crash_stack ? "q6v5->crash_stack is true" :
+		"q6v5->crash_stack is false");
+
 	if (q6v5->crash_stack) {
 		msg = qcom_smem_get(q6v5->smem_host_id, q6v5->crash_stack, &len);
 		if (!IS_ERR(msg) && len > 0 && msg[0])
 			dev_err(q6v5->dev, "%s\n", msg);
 	}
-
-	q6v5->running = false;
-
 	trace_rproc_qcom_event(dev_name(q6v5->dev), "q6v5_wdog", msg);
-	if (q6v5->ssr_subdev)
-		qcom_notify_early_ssr_clients(q6v5->ssr_subdev);
-
-	if (q6v5->rproc->recovery_disabled)
-		schedule_work(&q6v5->crash_handler);
-	else
-		rproc_report_crash(q6v5->rproc, RPROC_WATCHDOG);
 
 	return IRQ_HANDLED;
 }
@@ -178,6 +438,11 @@ static irqreturn_t q6v5_fatal_interrupt(int irq, void *data)
 	struct qcom_q6v5 *q6v5 = data;
 	size_t len;
 	char *msg;
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	char reason[MAX_SSR_REASON_LEN];
+	const char *name =	q6v5->rproc->name;
+#endif
 
 	if (!q6v5->running)
 		return IRQ_HANDLED;
@@ -194,23 +459,77 @@ static irqreturn_t q6v5_fatal_interrupt(int irq, void *data)
 	else
 		dev_err(q6v5->dev, "fatal error without message\n");
 
-	if (q6v5->crash_stack) {
-		msg = qcom_smem_get(q6v5->smem_host_id, q6v5->crash_stack, &len);
-		if (!IS_ERR(msg) && len > 0 && msg[0])
-			dev_err(q6v5->dev, "%s\n", msg);
-	}
-
 	q6v5->running = false;
-
-	trace_rproc_qcom_event(dev_name(q6v5->dev), "q6v5_fatal", msg);
 
 	if (q6v5->ssr_subdev)
 		qcom_notify_early_ssr_clients(q6v5->ssr_subdev);
 
 	if (q6v5->rproc->recovery_disabled)
-		schedule_work(&q6v5->crash_handler);
+		panic("Panicking, remoteproc %s crashed reason: %s\n", q6v5->rproc->name, msg);
 	else
 		rproc_report_crash(q6v5->rproc, RPROC_FATAL_ERROR);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+	if (strstr(q6v5->rproc->name, REMOTEPROC_ADSP)) {
+		if (!IS_ERR(msg) && len > 0 && msg[0]) {
+			if (strstr(msg, "err_inject_crash")) {
+				//Via Diag trigger adsp crash reported to the 10050 event
+				mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_ADSP_DAEMON, \
+					MM_FB_KEY_RATELIMIT_5MIN, "FieldData@@%s$$detailData@@audio$$module@@adsp", msg);
+			} else {
+				mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_ADSP_CRASH, \
+					MM_FB_KEY_RATELIMIT_5MIN, "FieldData@@%s$$detailData@@audio$$module@@adsp", msg);
+			}
+		} else {
+			mm_fb_audio_kevent_named(OPLUS_AUDIO_EVENTID_ADSP_CRASH, \
+				MM_FB_KEY_RATELIMIT_5MIN, "FieldData@@fatal error without message$$detailData@@audio$$module@@adsp");
+		}
+	}
+#endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	if (!IS_ERR(msg) && len > 0 && msg[0]) {
+		strlcpy(reason, msg, min(len, (size_t)MAX_SSR_REASON_LEN));
+		dev_err(q6v5->dev, "%s subsystem failure reason: %s.\n", name, reason);
+		//Add for customized subsystem ramdump to skip generate dump cause by SAU
+		if (strstr(name, REMOTEPROC_MSS)) {
+			mdmreason_set(reason);
+			dev_err(q6v5->dev, "debug modem subsystem failure reason: %s.\n", reason);
+			if (strstr(reason, "OPLUS_MODEM_NO_RAMDUMP_EXPECTED") || strstr(reason, "oplusmsg:go_to_error_fatal")) {
+				dev_err(q6v5->dev, "%s will subsys reset", __func__);
+				SKIP_GENERATE_RAMDUMP = true;
+			}
+
+			#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+			dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work1!\n", name);
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
+			#endif
+		}
+
+		if (strstr(name, REMOTEPROC_ADSP)) {
+			dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work2!\n", name);
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
+		}
+	}
+	else {
+		dev_err(q6v5->dev, "%s SFR: (unknown, empty string found).\n", name);
+		if (strstr(name, REMOTEPROC_ADSP) || strstr(name, REMOTEPROC_MSS)) {
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, 0);
+		}
+	}
+#endif
+
+	dev_err(q6v5->dev, "return fatal error IRQ_HANDLED at cycle:%llu, crash_stack state: %s\n",
+		get_cycles(),
+		q6v5->crash_stack ? "q6v5->crash_stack is true" :
+		"q6v5->crash_stack is false");
+
+	if (q6v5->crash_stack) {
+		msg = qcom_smem_get(q6v5->smem_host_id, q6v5->crash_stack, &len);
+		if (!IS_ERR(msg) && len > 0 && msg[0])
+			dev_err(q6v5->dev, "%s\n", msg);
+	}
+	trace_rproc_qcom_event(dev_name(q6v5->dev), "q6v5_fatal", msg);
 
 	return IRQ_HANDLED;
 }
@@ -434,6 +753,15 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
 	if (IS_ERR(q6v5->path))
 		return dev_err_probe(&pdev->dev, PTR_ERR(q6v5->path),
 				     "failed to acquire interconnect path\n");
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+	if (crash_report_workqueue == NULL) {
+		crash_report_workqueue = create_singlethread_workqueue("crash_report_workqueue");
+		if (crash_report_workqueue == NULL) {
+			dev_err(&pdev->dev,"crash_report_workqueue alloc fail\n");
+		}
+	}
+#endif
 
 	INIT_WORK(&q6v5->crash_handler, qcom_q6v5_crash_handler_work);
 

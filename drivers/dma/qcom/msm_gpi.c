@@ -120,7 +120,7 @@ enum EV_PRIORITY {
 #else
 #define GPI_DBG_LOG_SIZE (0) /* size must be power of 2 */
 #define DEFAULT_IPC_LOG_LVL (LOG_LVL_ERROR)
-#define CMD_TIMEOUT_MS (250)
+#define CMD_TIMEOUT_MS (500)
 /* verbose and register logging are disabled if !debug */
 #define GPII_REG(gpii, ch, fmt, ...)
 #define GPII_VERB(gpii, ch, fmt, ...)

@@ -39,6 +39,7 @@
 /* GPU_CC power domains */
 #define GPU_CC_CX_GDSC						0
 #define GPU_CC_CX_SMMU_GDSC					1
+#define GPU_CC_CX_GMU_GDSC					2
 
 /* GPU_CC resets */
 #define GPUCC_GPU_CC_CB_BCR					0

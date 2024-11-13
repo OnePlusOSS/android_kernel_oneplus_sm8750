@@ -350,14 +350,14 @@ static int funnel_probe(struct device *dev, struct resource *res)
 	if (!IS_ERR(drvdata->atclk)) {
 		ret = clk_prepare_enable(drvdata->atclk);
 		if (ret)
-			return ret;
+            return ret == -ETIMEDOUT ? -EPROBE_DEFER : ret;
 	}
 
 	drvdata->dclk = devm_clk_get(dev, "dynamic_clk");
 	if (!IS_ERR(drvdata->dclk)) {
 		ret = clk_prepare_enable(drvdata->dclk);
 		if (ret)
-			return ret;
+			return ret == -ETIMEDOUT ? -EPROBE_DEFER : ret;
 	} else
 		drvdata->dclk = NULL;
 

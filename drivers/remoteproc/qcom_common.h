@@ -8,6 +8,10 @@
 #include <linux/soc/qcom/qmi.h>
 #include <linux/remoteproc/qcom_rproc.h>
 
+#ifndef  OPLUS_FEATURE_MODEM_MINIDUMP
+#define OPLUS_FEATURE_MODEM_MINIDUMP
+#endif
+
 static const char * const subdevice_state_string[] = {
 	[QCOM_SSR_BEFORE_POWERUP]	= "before_powerup",
 	[QCOM_SSR_AFTER_POWERUP]	= "after_powerup",

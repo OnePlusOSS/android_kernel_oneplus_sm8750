@@ -33,6 +33,8 @@
 #include <linux/sched/walt.h>
 #endif
 #include <linux/nvmem-consumer.h>
+//bsp.storage.ufs 2021.10.14 add for /proc/devinfo/ufs
+#include <soc/oplus/ufs-oplus-dbg.h>
 
 #include <soc/qcom/ice.h>
 
@@ -1896,6 +1898,10 @@ static int ufs_qcom_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op,
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	int err = 0;
 
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+		ufs_sleep_time_get(hba);
+	//#endif
+
 	if (status == PRE_CHANGE)
 		return 0;
 
@@ -1940,6 +1946,10 @@ static int ufs_qcom_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	unsigned long flags;
 	int err;
+
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+		ufs_active_time_get(hba);
+	//#endif
 
 	if (host->vddp_ref_clk && (hba->rpm_lvl > UFS_PM_LVL_3 ||
 				   hba->spm_lvl > UFS_PM_LVL_3))
@@ -2496,7 +2506,8 @@ static void ufs_qcom_set_caps(struct ufs_hba *hba)
 	if (!host->disable_lpm) {
 		hba->caps |= UFSHCD_CAP_CLK_GATING |
 			UFSHCD_CAP_HIBERN8_WITH_CLK_GATING |
-			UFSHCD_CAP_CLK_SCALING |
+			/* To avoid deadlock problems caused by clkscaling, turn off clkscaling. */
+			/* UFSHCD_CAP_CLK_SCALING | */
 			UFSHCD_CAP_AUTO_BKOPS_SUSPEND |
 			UFSHCD_CAP_AGGR_POWER_COLLAPSE |
 			UFSHCD_CAP_WB_WITH_CLK_SCALING;
@@ -2539,7 +2550,7 @@ static int ufs_qcom_unvote_qos_all(struct ufs_hba *hba)
 
 	qcg = ufs_qos_req->qcg;
 	for (i = 0; i < ufs_qos_req->num_groups; i++, qcg++) {
-		flush_work(&qcg->vwork);
+		cancel_work_sync(&qcg->vwork);
 		if (!qcg->voted)
 			continue;
 		err = ufs_qcom_update_qos_constraints(qcg, QOS_MAX);
@@ -3845,6 +3856,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 			dev_err(host->hba->dev, "Fail to register UFS panic notifier\n");
 	}
 
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+		ufs_init_oplus_dbg(hba);
+	//#endif
+
 	return 0;
 
 out_disable_vccq_parent:
@@ -4270,6 +4285,10 @@ static void ufs_qcom_event_notify(struct ufs_hba *hba,
 	struct phy *phy = host->generic_phy;
 	bool ber_th_exceeded = false;
 	bool disable_ber = true;
+
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+	recordSignalerr(hba, *(u32 *)data, evt);
+	//#endif
 
 	switch (evt) {
 	case UFS_EVT_PA_ERR:
@@ -5154,6 +5173,10 @@ out:
 	return ret;
 }
 
+static void ufs_qcom_config_scsi_dev(struct scsi_device *sdev)
+{
+	ufs_oplus_init_sdev(sdev);
+}
 /*
  * struct ufs_hba_qcom_vops - UFS QCOM specific variant operations
  *
@@ -5185,6 +5208,7 @@ static const struct ufs_hba_variant_ops ufs_hba_qcom_vops = {
 	.op_runtime_config	= ufs_qcom_op_runtime_config,
 	.get_outstanding_cqs	= ufs_qcom_get_outstanding_cqs,
 	.config_esi		= ufs_qcom_config_esi,
+	.config_scsi_dev	= ufs_qcom_config_scsi_dev,
 };
 
 /**
@@ -5568,7 +5592,17 @@ static void ufs_qcom_hook_compl_command(void *param, struct ufs_hba *hba,
 	if (lrbp && lrbp->cmd) {
 		struct request *rq = scsi_cmd_to_rq(lrbp->cmd);
 		int sz = rq ? blk_rq_sectors(rq) : 0;
-
+		struct scsi_cmnd *cmd = lrbp->cmd;
+		/* if cost more than 100ms, print out in dmesg for IO analyze */
+		if ((cmd->cmnd[0] == READ_10 || cmd->cmnd[0] == WRITE_10 || cmd->cmnd[0] == READ_16 || cmd->cmnd[0] == WRITE_16) &&
+		    ktime_us_delta(lrbp->compl_time_stamp, lrbp->issue_time_stamp) > 100000) {
+			printk_ratelimited(
+				KERN_WARNING "%s cost more than 100ms, it's %lldms\n",
+				cmd->cmnd[0] == READ_10 ? "READ_10" :
+				cmd->cmnd[0] == WRITE_10 ? "WRITE_10" :
+				cmd->cmnd[0] == READ_16 ? "READ_16" : "WRITE_16",
+				ktime_us_delta(lrbp->compl_time_stamp, lrbp->issue_time_stamp) / 1000);
+		}
 		if (!is_mcq_enabled(hba)) {
 			ufs_qcom_log_str(host, ">,%x,%d,%x,%d\n",
 							lrbp->cmd->cmnd[0],
@@ -5843,6 +5877,10 @@ static int ufs_qcom_remove(struct platform_device *pdev)
 	if (msm_minidump_enabled())
 		atomic_notifier_chain_unregister(&panic_notifier_list,
 				&host->ufs_qcom_panic_nb);
+
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+	ufs_remove_oplus_dbg();
+	//#endif
 
 	ufshcd_remove(hba);
 	platform_msi_domain_free_irqs(hba->dev);

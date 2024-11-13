@@ -8,6 +8,21 @@
 
 #include "walt.h"
 #include "trace.h"
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_LOADBALANCE)
+#include <../../oplus_cpu/sched/sched_assist/sa_balance.h>
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_pipeline.h>
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_ABNORMAL_FLAG)
+#include <../kernel/oplus_cpu/oplus_overload/task_overload.h>
+#endif
 
 static inline unsigned long walt_lb_cpu_util(int cpu)
 {
@@ -188,6 +203,10 @@ static void walt_lb_check_for_rotation(struct rq *src_rq)
 		if (rq->nr_running > 1)
 			continue;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+		if (fbg_skip_migration(rq->curr, i, src_cpu))
+			continue;
+#endif
 		wts = (struct walt_task_struct *) rq->curr->android_vendor_data1;
 		run = wc - wts->last_enqueued_ts;
 
@@ -263,6 +282,11 @@ static inline bool _walt_can_migrate_task(struct task_struct *p, int dst_cpu,
 	/* Don't detach task if dest cpu is halted */
 	if (cpu_halted(dst_cpu))
 		return false;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+	if (oplus_pipeline_task_skip_cpu(p, dst_cpu))
+		return false;
+#endif
 
 	return true;
 }
@@ -685,6 +709,18 @@ void walt_lb_tick(struct rq *rq)
 	unsigned long flags;
 	struct walt_rq *prev_wrq = &per_cpu(walt_rq, cpu_of(rq));
 	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	bool need_up_migrate = false;
+#endif
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_LOADBALANCE)
+	if (__oplus_tick_balance(NULL, rq))
+		return;
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (fbg_need_up_migration(p, rq))
+		need_up_migrate = true;
+#endif
 
 	raw_spin_lock(&rq->__lock);
 	if (available_idle_cpu(prev_cpu) && is_reserved(prev_cpu) && !rq->active_balance)
@@ -696,7 +732,15 @@ void walt_lb_tick(struct rq *rq)
 
 	walt_cfs_tick(rq);
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_ABNORMAL_FLAG)
+	test_task_overload(p);
+#endif /* #OPLUS_FEATURE_ABNORMAL_FLAG */
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (!rq->misfit_task_load && !need_up_migrate)
+#else
 	if (!rq->misfit_task_load)
+#endif
 		return;
 
 	if (READ_ONCE(p->__state) != TASK_RUNNING || p->nr_cpus_allowed == 1)
@@ -813,6 +857,11 @@ static bool walt_balance_rt(struct rq *this_rq)
 			wallclock - wts->last_wake_ts < WALT_RT_PULL_THRESHOLD_NS)
 		goto unlock;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (!fbg_rt_task_fits_capacity(p, this_cpu))
+		goto unlock;
+#endif
+
 	pulled = true;
 	deactivate_task(src_rq, p, 0);
 	set_task_cpu(p, this_cpu);
@@ -856,6 +905,11 @@ static void walt_newidle_balance(struct rq *this_rq,
 	int has_misfit = 0;
 	int i;
 	struct task_struct *pulled_task_struct = NULL;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_LOADBALANCE)
+	if (__oplus_newidle_balance(NULL, this_rq, rf, pulled_task, done))
+		return;
+#endif
 
 	if (unlikely(walt_disabled))
 		return;

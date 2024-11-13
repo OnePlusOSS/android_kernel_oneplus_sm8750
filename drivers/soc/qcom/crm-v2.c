@@ -1632,7 +1632,6 @@ static int crm_probe_drvs(struct crm_drv_top *crm, struct device_node *dn)
 	crm_ver = readl_relaxed(crm->common + crm->desc->cfg_regs[CRM_VERSION]);
 	major_ver = field_get(crm->desc->cfg_regs[MAJOR_VERSION], crm_ver);
 	minor_ver = field_get(crm->desc->cfg_regs[MINOR_VERSION], crm_ver);
-
 	crm_cfg = readl_relaxed(crm->common + crm->desc->cfg_regs[CRM_CFG_PARAM_1]);
 	crm->max_hw_drv = field_get(crm->desc->cfg_regs[NUM_HW_DRVS], crm_cfg);
 	crm->max_sw_drv = field_get(crm->desc->cfg_regs[NUM_SW_DRVS], crm_cfg);
@@ -1778,6 +1777,7 @@ static const struct crm_desc pcie_crm_desc_v2 = {
 		[NUM_OF_NODES]			= GENMASK(30, 26),
 		[CRM_ENABLE]			= 0xC,
 	},
+
 	.chn_regs = {
 		[CHN_BUSY]			 = 0x370,
 		[CHN_UPDATE]			 = 0x374,
@@ -1932,6 +1932,16 @@ static const struct crm_desc cam_crm_desc_v2 = {
 		[CRM_DISTANCE]			 = 0x50,
 		[STATUS_BE]			 = 0x18,
 		[STATUS_FE]			 = 0x1C,
+	},
+	.crmb_pt_regs = {
+		[CRM_BASE]			 = 0x0,
+		[CRM_DISTANCE]			 = 0x14,
+		[TCS_CMD_DATA]			 = 0x0,
+		[TCS_CMD_ADDR]			 = 0x4,
+		[TCS_CMD_CTRL]			 = 0x8,
+		[TCS_CMD_STATUS]		 = 0xC,
+		[TCS_CMD_ENABLE]		 = 0x10,
+		[CRMB_PT_FSM_STATUS]		 = 0x7c,
 	},
 	.crmc_regs = {
 		[CRM_BASE]			 = 0x0,

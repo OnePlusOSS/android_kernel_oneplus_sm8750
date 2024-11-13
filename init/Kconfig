@@ -869,6 +869,10 @@ config UCLAMP_BUCKETS_COUNT
 
 	  If in doubt, use the default value.
 
+#ifdef OPLUS_FEATURE_CPU
+source "kernel/oplus_cpu/Kconfig"
+#endif /* OPLUS_FEATURE_CPU */
+
 endmenu
 
 #

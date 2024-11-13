@@ -1390,7 +1390,6 @@ struct file *filp_open(const char *filename, int flags, umode_t mode)
 }
 EXPORT_SYMBOL_NS(filp_open, ANDROID_GKI_VFS_EXPORT_ONLY);
 
-
 /* ANDROID: Allow drivers to open only block files from kernel mode */
 struct file *filp_open_block(const char *filename, int flags, umode_t mode)
 {

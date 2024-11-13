@@ -1,6 +1,9 @@
+load("//oplus/bazel:oplus_modules_define.bzl", _get_oplus_features_as_list = "get_oplus_features_as_list")
 def define_top_level_config(target):
     """Define common top-level variables in build.config"""
     rule_name = "{}_top_level_config".format(target)
+    oplus_features = _get_oplus_features_as_list()
+    oplus_features_str = "\n".join(oplus_features)
     native.genrule(
         name = rule_name,
         srcs = [],
@@ -9,9 +12,10 @@ def define_top_level_config(target):
           cat << 'EOF' > "$@"
 # === define_top_level_config ===
 BUILDING_WITH_BAZEL=true
+{oplus_features}
 # === end define_top_level_config ===
 EOF
-        """,
+        """.format(oplus_features=oplus_features_str),
     )
 
     return ":{}".format(rule_name)

@@ -494,7 +494,7 @@ static const struct llcc_slice_config sun_data[] = {
 						0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 33},
 	{LLCC_CAMSRTRF, 21, 6144, 1, 1, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0,
 						0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 33},
-	{LLCC_CPUSSMPAM, 6, 2048, 1, 1, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0,
+	{LLCC_CPUSSMPAM, 6, 2048, 1, 1, 0xFFFFFFFF, 0, 0, 0, 0, 0, 1,
 						1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 };
 

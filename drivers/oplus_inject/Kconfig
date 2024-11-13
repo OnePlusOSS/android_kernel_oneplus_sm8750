@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-2.0
+# Used to set environment variables during compilation to dynamically enable certain compilation functions:
+# compilation or not compilation of modules
+# conditional compilation of C language files
+# Configuration settings for data injection and fault injection code
+# In Kconfig, we have made the following conventions:
+# All configurations should start with OPLUS_FEATURE_
+# All configurations should default to n, and the defconfig file determines whether to enable it.
+# For compatibility, all configurations should be tristate, although it only be configured as y/n
+# 用于在编译时设置环境变量来动态开启某些编译功能：针对模块的编译或不编译; 针对C代码的条件编译
+# 为数据注入及故障注入代码设置的配置
+# 在 Kconfig 中，我们作了如下约定：
+# 所有的配置，应当以 OPLUS_FEATURE_ 打头
+# 所有的配置，应该默认为 n, 由 defconfig 文件来决定是否使能
+# 为了兼容性设计，所有的配置，应该是 tristate, 虽然他可能只被配置为 y/n
+# 80353364
+# 2023-12-29
+
+config OPLUS_FEATURE_BSP_DRV_INJECT_TEST
+	tristate "data and fault inject test switch"
+	default n
+	help
+	  data and fault inject test switch
+
+config OPLUS_FEATURE_BSP_DRV_VND_INJECT_TEST
+	tristate "data and fault inject test vendor switch"
+	default n
+	help
+	  data and fault inject test switch
+
+config OPLUS_FEATURE_BSP_DRV_SENSOR_INJECT
+	tristate "sensor data inject test switch"
+	default n
+	help
+	  sensor data inject test switch

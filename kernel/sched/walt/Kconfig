@@ -38,4 +38,5 @@ config SCHED_CONSERVATIVE_BOOST_LPM_BIAS
 	  modes on a cpu if conservative boost is active. The cpu
 	  will not enter low power mode for a hysteresis time period,
 	  which can be configured from userspace.
+
 endmenu

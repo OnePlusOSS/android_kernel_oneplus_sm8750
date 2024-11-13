@@ -12,13 +12,13 @@
 #define SYS_MPAM0_EL1		sys_reg(3, 0, 10, 5, 1)
 #define SYS_MPAM1_EL1		sys_reg(3, 0, 10, 5, 0)
 
-#define PARTID_BITS			16
+#define PARTID_BITS		16
 #define PARTID_I_SHIFT		0
 #define PARTID_D_SHIFT		(PARTID_I_SHIFT + PARTID_BITS)
 
 #define PARTID_DEFAULT		0
 #define PARTID_RESERVED		16
-#define PARTID_MAX			64
+#define PARTID_MAX		64
 #define PARTID_AVAILABLE	(PARTID_MAX - PARTID_RESERVED)
 
 #define MSMON_CFG_MON_SEL	0x0800
@@ -26,15 +26,16 @@
 #define MSMON_CFG_CSU_CTL	0x0818
 #define MSMON_CFG_MBWU_FLT	0x0820
 #define MSMON_CFG_MBWU_CTL	0x0828
-#define MSMON_CSU			0x0840
-#define MSMON_MBWU			0x0860
+#define MSMON_CSU		0x0840
+#define MSMON_MBWU		0x0860
 #define MSMON_MBWU_L		0x0880
 
-#define MAX_MONITOR_INSTANCES			16 /* Reserved 12:15 */
+#define MAX_MONITOR_INSTANCES		16 /* Reserved 12:15 */
 #define MAX_MONITOR_INSTANCES_SHARED	12
 #define MONITOR_MAX		MAX_MONITOR_INSTANCES_SHARED
 
-#define MPAM_MAX_RETRY		5000
+#define MPAM_MAX_RETRY			5000
+#define MPAM_MAX_MATCH_SEQ_RETRY	10
 
 enum msc_id {
 	MSC_0 = 0,
@@ -158,13 +159,23 @@ struct platform_mpam_bw_ctrl_config {
 } __packed;
 
 /* NOC Monitor structure in shared memory */
-struct platform_monitor_value {
-	uint32_t capture_status;
-	uint32_t msc_id;
-	uint32_t client_id;
-	uint32_t bwmon_byte_count;
-	uint64_t last_capture_time;
-} __packed;
+union platform_monitor_value {
+	struct {
+		uint32_t capture_status;
+		uint32_t msc_id;
+		uint32_t client_id;
+		uint32_t bwmon_byte_count;
+		uint64_t last_capture_time;
+	} V1 __packed;
+
+	struct {
+		uint32_t capture_status;
+		uint32_t msc_id;
+		uint32_t client_id;
+		uint64_t bwmon_byte_count __aligned(8);
+		uint64_t last_capture_time;
+	} V2 __packed;
+};
 
 #if IS_ENABLED(CONFIG_QTI_MPAM)
 int qcom_mpam_set_cache_partition(struct mpam_set_cache_partition *param);

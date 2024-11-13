@@ -360,7 +360,6 @@ int sched_lpm_disallowed_time(int cpu, u64 *timeout)
 {
 	u64 now = sched_clock();
 	u64 bias_end_time = atomic64_read(&per_cpu(busy_hyst_end_time, cpu));
-
 	if (unlikely(walt_disabled))
 		return -EAGAIN;
 

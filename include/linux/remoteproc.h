@@ -654,7 +654,15 @@ struct rproc_vdev {
 	u32 index;
 };
 
+#if IS_ENABLED(CONFIG_REMOTEPROC)
 struct rproc *rproc_get_by_phandle(phandle phandle);
+#else
+static inline struct rproc *rproc_get_by_phandle(phandle phandle)
+{
+	return NULL;
+}
+#endif
+
 struct rproc *rproc_get_by_child(struct device *dev);
 
 struct rproc *rproc_alloc(struct device *dev, const char *name,

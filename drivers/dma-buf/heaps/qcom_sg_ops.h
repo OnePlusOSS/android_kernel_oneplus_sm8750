@@ -84,4 +84,13 @@ struct mem_buf_vmperm *qcom_sg_lookup_vmperm(struct dma_buf *dmabuf);
 
 extern struct mem_buf_dma_buf_ops qcom_sg_buf_ops;
 
+#if IS_ENABLED(CONFIG_QCOM_DMABUF_HEAPS_SYSTEM) && IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+extern atomic64_t qcom_system_heap_total;
+inline bool is_system_heap_deferred_free(void (*free)(struct qcom_sg_buffer *buffer));
+#else /* CONFIG_QCOM_DMABUF_HEAPS_SYSTEM */
+static inline bool is_system_heap_deferred_free(void (*free)(struct qcom_sg_buffer *buffer)) {
+	return false;
+}
+#endif /* CONFIG_QCOM_DMABUF_HEAPS_SYSTEM */
+
 #endif /* _QCOM_SG_OPS_H */

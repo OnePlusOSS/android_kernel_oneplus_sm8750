@@ -24,6 +24,10 @@
 
 #include "internal.h"
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+#include <linux/proc_fs.h>
+#endif
+
 struct debug_regulator {
 	struct list_head	list;
 	struct regulator	*reg;
@@ -33,6 +37,29 @@ struct debug_regulator {
 
 static DEFINE_MUTEX(debug_reg_list_lock);
 static LIST_HEAD(debug_reg_list);
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static bool debug_suspend_flag;
+static unsigned int suspend_regulator_cnt;
+static unsigned int suspend_consumer_cnt;
+
+struct consumer_regulator {
+	struct list_head list;
+	const char *supply_name;
+	unsigned int enabled_count;
+	int min_uV;
+	int max_uV;
+	int uA_load;
+};
+
+struct suspend_enabled_regulator {
+	const char *regulator_name;
+	struct list_head enabled_regulator_list;
+	struct list_head enabled_consumer_list;
+};
+
+static LIST_HEAD(suspend_regulator_list);
+#endif
 
 static const char *rdev_name(struct regulator_dev *rdev)
 {
@@ -49,6 +76,11 @@ static const char *rdev_name(struct regulator_dev *rdev)
 #define dreg_dbg(dreg, fmt, ...)					\
 	pr_debug("%s: %s: " fmt, __func__, rdev_name((dreg)->rdev),	\
 		##__VA_ARGS__)
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+#define SUSPEND_REGULATOR_MAX         60
+#define SUSPEND_CONSUMER_MAX          20
+#endif
 
 static struct regulator *reg_debug_get_consumer(struct debug_regulator *dreg)
 {
@@ -609,6 +641,11 @@ static void regulator_debug_print_enabled(struct regulator_dev *rdev)
 	int mode = -EPERM;
 	int uV = -EPERM;
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	struct suspend_enabled_regulator *suspend_reg = NULL;
+	struct consumer_regulator *suspend_consumer = NULL;
+#endif
+
 	if (_regulator_is_enabled(rdev) <= 0)
 		return;
 
@@ -634,6 +671,18 @@ static void regulator_debug_print_enabled(struct regulator_dev *rdev)
 		pr_info("  %-32s EN    Min_uV   Max_uV  load_uA\n",
 			"Device-Supply");
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	if (suspend_regulator_cnt < SUSPEND_REGULATOR_MAX) {
+		suspend_reg = kzalloc(sizeof(struct suspend_enabled_regulator), GFP_ATOMIC);
+		if (suspend_reg) {
+			suspend_reg->regulator_name = rdev_name(rdev);
+			INIT_LIST_HEAD(&suspend_reg->enabled_consumer_list);
+			list_add(&suspend_reg->enabled_regulator_list, &suspend_regulator_list);
+			suspend_regulator_cnt++;
+		}
+	}
+#endif
+
 	list_for_each_entry(reg, &rdev->consumer_list, list) {
 		if (reg->supply_name)
 			supply_name = reg->supply_name;
@@ -645,8 +694,50 @@ static void regulator_debug_print_enabled(struct regulator_dev *rdev)
 			reg->voltage[PM_SUSPEND_ON].min_uV,
 			reg->voltage[PM_SUSPEND_ON].max_uV,
 			reg->uA_load);
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+		if ((reg->enable_count > 0) && (suspend_consumer_cnt < SUSPEND_CONSUMER_MAX)) {
+			suspend_consumer = kzalloc(sizeof(struct consumer_regulator), GFP_ATOMIC);
+			if (suspend_consumer) {
+				suspend_consumer->supply_name   = reg->supply_name;
+				suspend_consumer->enabled_count = reg->enable_count;
+				suspend_consumer->min_uV       = reg->voltage[PM_SUSPEND_ON].min_uV;
+				suspend_consumer->max_uV       = reg->voltage[PM_SUSPEND_ON].max_uV;
+				suspend_consumer->uA_load       = reg->uA_load;
+
+				if (suspend_reg) {
+					list_add(&suspend_consumer->list, \
+					&suspend_reg->enabled_consumer_list);
+					suspend_consumer_cnt++;
+				}
+			}
+		}
+#endif
 	}
 }
+
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+void reinit_suspend_enabled_regulators(void)
+{
+	struct suspend_enabled_regulator *suspend_reg, *reg_temp;
+	struct consumer_regulator *suspend_consumer, *consumer_temp;
+
+	list_for_each_entry_safe(suspend_reg, reg_temp, &suspend_regulator_list,\
+	enabled_regulator_list) {
+		list_for_each_entry_safe(suspend_consumer, consumer_temp,\
+		&suspend_reg->enabled_consumer_list, list) {
+			list_del(&suspend_consumer->list);
+			kfree(suspend_consumer);
+		}
+
+		list_del(&suspend_reg->enabled_regulator_list);
+		kfree(suspend_reg);
+	}
+
+	suspend_regulator_cnt = 0;
+	suspend_consumer_cnt = 0;
+}
+#endif
 
 static void regulator_debug_suspend_trace_probe(void *unused,
 					const char *action, int val, bool start)
@@ -655,6 +746,9 @@ static void regulator_debug_suspend_trace_probe(void *unused,
 
 	if (start && val > 0 && !strcmp("machine_suspend", action)) {
 		pr_info("Enabled regulators:\n");
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+		reinit_suspend_enabled_regulators();
+#endif
 		list_for_each_entry(dreg, &debug_reg_list, list)
 			regulator_debug_print_enabled(dreg->rdev);
 	}
@@ -696,6 +790,94 @@ static int reg_debug_suspend_enable_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(reg_debug_suspend_enable_fops,
 	reg_debug_suspend_enable_get, reg_debug_suspend_enable_set, "%llu\n");
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static ssize_t debug_suspend_write(struct file *filp,
+		const char __user *buff, size_t len, loff_t *data)
+{
+	char buf[10] = {0};
+	unsigned int val = 0;
+	int ret = 0;
+
+	if (len > sizeof(buf))
+		return -EFAULT;
+
+	if (copy_from_user((char *)buf, buff, len))
+		return -EFAULT;
+
+	if (kstrtouint(buf, sizeof(buf), &val))
+		return -EINVAL;
+
+	debug_suspend_flag = !!val;
+	if (debug_suspend_flag)
+		ret = register_trace_suspend_resume(
+			regulator_debug_suspend_trace_probe, NULL);
+	else
+		ret = unregister_trace_suspend_resume(
+			regulator_debug_suspend_trace_probe, NULL);
+	if (ret)
+		pr_err("%s: Failed to %sregister suspend trace callback, ret=%d\n",
+			__func__, debug_suspend_flag ? "" : "un", ret);
+
+	return len;
+}
+
+static int debug_suspend_show(struct seq_file *seq_filp, void *v)
+{
+	seq_printf(seq_filp, "%d\n", debug_suspend_flag);
+	return 0;
+}
+static int debug_suspend_open(struct inode *inode, struct file *file)
+{
+	int ret;
+
+	ret = single_open(file, debug_suspend_show, NULL);
+
+	return ret;
+}
+static const struct proc_ops debug_suspend_fops = {
+	.proc_open		= debug_suspend_open,
+	.proc_write		= debug_suspend_write,
+	.proc_read		= seq_read,
+};
+
+static int suspend_enabled_regulators_show(struct seq_file *s, void *unused)
+{
+	struct suspend_enabled_regulator *suspend_reg;
+	struct consumer_regulator *suspend_consumer;
+
+	list_for_each_entry(suspend_reg, &suspend_regulator_list, enabled_regulator_list) {
+			seq_printf(s, "%s\n", suspend_reg->regulator_name);
+			seq_printf(s, "  %-32s EN    Min_uV   Max_uV  load_uA\n",
+				"Device-Supply");
+		list_for_each_entry(suspend_consumer, &suspend_reg->enabled_consumer_list, list) {
+			seq_printf(s, "  %-32s %d   %8d %8d %8d\n", suspend_consumer->supply_name,
+					suspend_consumer->enabled_count,
+					suspend_consumer->min_uV,
+					suspend_consumer->max_uV,
+					suspend_consumer->uA_load);
+		}
+	}
+
+	return 0;
+}
+
+static int suspend_enabled_regulators_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, suspend_enabled_regulators_show, inode->i_private);
+}
+
+static const struct proc_ops suspend_enabled_regulators_fops = {
+	.proc_open		= suspend_enabled_regulators_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= seq_release,
+};
+#endif
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+struct proc_dir_entry *regulator_proc;
+#endif
+
 static int __init regulator_debug_init(void)
 {
 	static struct dentry *dir;
@@ -718,6 +900,13 @@ static int __init regulator_debug_init(void)
 		pr_err("%s: unable to create regulator debug_suspend debugfs directory, ret=%d\n",
 			__func__, ret);
 	}
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	regulator_proc = proc_mkdir("regulator", NULL);
+	proc_create("debug_suspend", 0664, regulator_proc, &debug_suspend_fops);
+	proc_create("suspend_enabled_regulators", 0444, regulator_proc,\
+	&suspend_enabled_regulators_fops);
+#endif
 
 	return 0;
 }

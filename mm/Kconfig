@@ -1293,5 +1293,6 @@ config LOCK_MM_AND_FIND_VMA
 	depends on !STACK_GROWSUP
 
 source "mm/damon/Kconfig"
+source "mm/mm_osvelte/Kconfig"
 
 endmenu

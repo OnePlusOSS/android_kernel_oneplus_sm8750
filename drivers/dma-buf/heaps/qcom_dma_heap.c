@@ -27,6 +27,11 @@
 #define FOPS_INIT_VAL ERR_PTR(-EINVAL)
 static const struct file_operations *dma_buf_cached_fops;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+#include "sys-memstat.h"
+#include "common.h"
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
+
 static int qcom_dma_heap_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -109,8 +114,38 @@ static struct platform_driver qcom_dma_heap_driver = {
 	},
 };
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+extern atomic64_t qcom_dma_heap_pool;
+extern atomic64_t qcom_system_heap_total;
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
+extern atomic64_t boost_pool_pages;
+#endif /*CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL*/
+
+long read_dmabuf_mem_usage(enum mtrack_subtype type)
+{
+	if (type == MTRACK_DMABUF_SYSTEM_HEAP)
+		return atomic64_read(&qcom_system_heap_total) >> PAGE_SHIFT;
+	else if (type == MTRACK_DMABUF_POOL)
+		return atomic64_read(&qcom_dma_heap_pool);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
+	else if (type == MTRACK_DMABUF_BOOST_POOL)
+		return atomic64_read(&boost_pool_pages);
+#endif /* CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
+
+	return 0;
+}
+
+static struct mtrack_debugger dmabuf_mtrack_debugger = {
+	.mem_usage = read_dmabuf_mem_usage,
+	.dump_usage_stat = NULL,
+};
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
+
 static int __init init_heap_driver(void)
 {
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	register_mtrack_debugger(MTRACK_DMABUF, &dmabuf_mtrack_debugger);
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 	return platform_driver_register(&qcom_dma_heap_driver);
 }
 module_init(init_heap_driver);

@@ -10,6 +10,10 @@
 #include <linux/string.h>
 #include <soc/qcom/mpam.h>
 
+#define platform_mpam_get(ptr, member) ({	\
+	(mpam_version.version >= 0x10002) ?	\
+	ptr->V2.member : ptr->V1.member; })
+
 struct platform_mpam_item {
 	struct config_group group;
 	int msc_id;
@@ -25,9 +29,10 @@ struct platform_mpam_gear {
 };
 
 static int support_gear_cnt;
+static struct mpam_ver_ret mpam_version;
 static struct config_group *root_group;
 static struct platform_mpam_gear *support_gears;
-static struct platform_monitor_value *mpam_mon_base;
+static void *mpam_mon_base;
 
 static inline struct platform_mpam_item *get_pm_item(
 					   struct config_item *item)
@@ -125,21 +130,29 @@ CONFIGFS_ATTR(platform_mpam_, enable_monitor);
 static ssize_t platform_mpam_monitor_data_show(struct config_item *item,
 		char *page)
 {
-	int index, retry_cnt = 0;
+	int index, retry_cnt = 0, match_seq_cnt = 0;
 	uint64_t byte_cnt, timestamp, capture_status;
-	struct platform_monitor_value *mpam_mon_data;
+	union platform_monitor_value data, *pdata;
 
 	if (get_pm_item(item)->monitor_enabled) {
 		index = get_pm_item(item)->monitor_index;
-		mpam_mon_data = &mpam_mon_base[index];
+		pdata = mpam_mon_base + index * ((mpam_version.version >= 0x10002) ?
+				sizeof(data.V2) : sizeof(data.V1));
 		do {
-			while (unlikely((capture_status =
-					mpam_mon_data->capture_status) % 2) &&
+			while (unlikely((capture_status = platform_mpam_get(
+					pdata, capture_status)) % 2) &&
 					(retry_cnt < MPAM_MAX_RETRY))
 				retry_cnt++;
-			timestamp = mpam_mon_data->last_capture_time;
-			byte_cnt = mpam_mon_data->bwmon_byte_count;
-		} while (capture_status != mpam_mon_data->capture_status);
+			timestamp = platform_mpam_get(
+				pdata, last_capture_time);
+			byte_cnt = platform_mpam_get(
+				pdata, bwmon_byte_count);
+		} while ((capture_status !=
+			platform_mpam_get(pdata, capture_status)) &&
+			(match_seq_cnt++ < MPAM_MAX_MATCH_SEQ_RETRY));
+
+		if (match_seq_cnt == MPAM_MAX_MATCH_SEQ_RETRY)
+			return scnprintf(page, PAGE_SIZE, "get monitor data failed\n");
 
 		return scnprintf(page, PAGE_SIZE, "timestamp=%llu,byte_cnt=%llu\n",
 			timestamp, byte_cnt);
@@ -220,7 +233,6 @@ static int platform_mpam_probe(struct platform_device *pdev)
 	struct config_group *p_group;
 	struct platform_mpam_item *new_item;
 	struct platform_mpam_read_bw_ctrl bw_ctrl_param;
-	struct mpam_ver_ret mpam_version;
 	struct device_node *np = pdev->dev.of_node;
 
 	ret = qcom_mpam_get_version(&mpam_version);

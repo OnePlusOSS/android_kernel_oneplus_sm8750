@@ -364,8 +364,9 @@ static void adc5_gen3_dump_regs_debug(struct adc5_chip *adc)
 		pr_err("ADC DEBUG BASE DUMP\n");
 		adc5_gen3_dump_register(adc->regmap, adc->debug_base);
 	}
-
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	BUG_ON(1);
+#endif
 }
 #else
 static void adc5_gen3_ipc_dump_register(struct adc5_chip *adc, unsigned int offset)
@@ -1572,6 +1573,10 @@ static const struct adc5_channels adc5_gen4_chans_pmic[ADC5_MAX_CHANNEL] = {
 						SCALE_HW_CALIB_DEFAULT)
 	[ADC5_GEN4_VPH_PWR]		= ADC5_CHAN_VOLT("vph_pwr", 1,
 						SCALE_HW_CALIB_DEFAULT)
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	[ADC5_GEN4_VPH2_PWR]		= ADC5_CHAN_VOLT("vph2_pwr", 1,
+						SCALE_HW_CALIB_DEFAULT)
+#endif
 	[ADC5_GEN4_VBAT_SNS_QBG]	= ADC5_CHAN_VOLT("vbat_sns", 1,
 						SCALE_HW_CALIB_DEFAULT)
 	[ADC5_GEN4_CHG_TEMP]		= ADC5_CHAN_TEMP("chg_temp", 0,

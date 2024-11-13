@@ -1059,9 +1059,13 @@ static int cti_probe(struct amba_device *adev, const struct amba_id *id)
 
 	drvdata->dclk = devm_clk_get(dev, "dynamic_clk");
 	if (!IS_ERR(drvdata->dclk)) {
+        
 		ret = clk_prepare_enable(drvdata->dclk);
 		if (ret)
-			return ret;
+        {
+          return  ret  == -ETIMEDOUT ? -EPROBE_DEFER:ret;
+        }
+        
 	} else
 		drvdata->dclk = NULL;
 

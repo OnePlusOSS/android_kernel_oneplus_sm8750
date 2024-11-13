@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
+CFLAGS_fsa4480-i2c.o += -I$(srctree)/drivers/usb/typec/tcpc/inc \
+			-I$(srctree)/drivers/power/oplus/v2/include
+CFLAGS_wcd939x-i2c.o += -I$(srctree)/drivers/power/oplus/v2/include
 CFLAGS_rpmh-rsc.o := -I$(src)
 obj-$(CONFIG_QCOM_AOSS_QMP) +=	qcom_aoss.o
 obj-$(CONFIG_QCOM_GENI_SE) +=	qcom-geni-se.o
@@ -30,6 +33,7 @@ obj-$(CONFIG_QCOM_SMP2P)	+= smp2p.o
 obj-$(CONFIG_QCOM_SMSM)	+= smsm.o
 obj-$(CONFIG_QCOM_SMP2P_SLEEPSTATE) += smp2p_sleepstate.o
 obj-$(CONFIG_QSEE_IPC_IRQ_BRIDGE) += qsee_ipc_irq_bridge.o
+obj-$(CONFIG_QCOM_GLINK) += glink_probe.o
 obj-$(CONFIG_QCOM_SOCINFO)	+= socinfo.o
 obj-$(CONFIG_QCOM_CPU_PHYS_LOG_MAP) += cpu_phys_log_map.o
 obj-$(CONFIG_QCOM_DCC_V2) += dcc_v2.o

@@ -604,4 +604,7 @@ source "drivers/misc/cardreader/Kconfig"
 source "drivers/misc/uacce/Kconfig"
 source "drivers/misc/pvpanic/Kconfig"
 source "drivers/misc/mchp_pci1xxxx/Kconfig"
+#ifdef OPLUS_FEATURE_CHG_BASIC
+source "drivers/misc/vibrator/aw8697_haptic/Kconfig"
+#endif
 endmenu

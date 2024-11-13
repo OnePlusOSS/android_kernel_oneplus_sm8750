@@ -26,6 +26,9 @@ obj-$(CONFIG_GENERIC_MSI_IRQ) += platform-msi.o
 obj-$(CONFIG_GENERIC_ARCH_TOPOLOGY) += arch_topology.o
 obj-$(CONFIG_GENERIC_ARCH_NUMA) += arch_numa.o
 obj-$(CONFIG_ACPI) += physical_location.o
+obj-$(CONFIG_OPLUS_FW_UPDATE)   += kernelFwUpdate/
+obj-$(CONFIG_TOUCHPANEL_NOTIFY) += touchpanel_notify/
+obj-$(CONFIG_OPLUS_MAGCVR_NOTIFY) += magtransfer/
 
 obj-y			+= test/
 

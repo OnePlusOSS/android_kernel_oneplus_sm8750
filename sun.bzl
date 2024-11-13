@@ -2,6 +2,8 @@ load(":target_variants.bzl", "la_variants")
 load(":msm_kernel_la.bzl", "define_msm_la")
 load(":image_opts.bzl", "boot_image_opts")
 
+load("//oplus/bazel:oplus_modules_define.bzl", _get_oplus_features = "oplus_ddk_get_oplus_features")
+
 target_name = "sun"
 
 def define_sun():
@@ -81,7 +83,9 @@ def define_sun():
         "drivers/iio/adc/qcom-vadc-common.ko",
         "drivers/iio/adc/qti-glink-adc.ko",
         "drivers/input/misc/pm8941-pwrkey.ko",
-        "drivers/input/misc/qcom-hv-haptics.ko",
+    	"drivers/input/misc/qcom-hv-haptics.ko",
+        "drivers/misc/vibrator/aw8697_haptic/haptic_feedback.ko",
+    	"drivers/input/misc/qpnp-power-on.ko",
         "drivers/interconnect/qcom/icc-bcm-voter.ko",
         "drivers/interconnect/qcom/icc-debug.ko",
         "drivers/interconnect/qcom/icc-rpmh.ko",
@@ -122,7 +126,12 @@ def define_sun():
         "drivers/power/reset/qcom-pon.ko",
         "drivers/power/reset/qcom-reboot-reason.ko",
         "drivers/power/reset/reboot-mode.ko",
-        "drivers/power/supply/qti_battery_charger.ko",
+        #ifndef OPLUS_FEATURE_CHG_BASIC
+        #"drivers/power/supply/qti_battery_charger.ko",
+        #else
+        "drivers/power/oplus/v2/oplus_chg_v2.ko",
+        "drivers/power/oplus/test-kit/test-kit.ko",
+        #endif
         "drivers/regulator/debug-regulator.ko",
         "drivers/regulator/proxy-consumer.ko",
         "drivers/regulator/qcom-amoled-regulator.ko",
@@ -168,6 +177,7 @@ def define_sun():
         "drivers/soc/qcom/eud.ko",
         "drivers/soc/qcom/gh_tlmm_vm_mem_access.ko",
         "drivers/soc/qcom/gic_intr_routing.ko",
+	"drivers/soc/qcom/glink_probe.ko",
         "drivers/soc/qcom/hung_task_enh.ko",
         "drivers/soc/qcom/llcc-qcom.ko",
         "drivers/soc/qcom/llcc_perfmon.ko",
@@ -222,6 +232,7 @@ def define_sun():
         "drivers/soc/qcom/sysmon_subsystem_stats.ko",
         "drivers/soc/qcom/tmecom/tmecom-intf.ko",
         "drivers/soc/qcom/wcd_usbss_i2c.ko",
+        "drivers/soc/oplus/boot/qcom_watchdog/qcom_enhance_watchdog.ko",
         "drivers/spi/q2spi-geni.ko",
         "drivers/spi/spi-msm-geni.ko",
         "drivers/spmi/spmi-pmic-arb.ko",
@@ -275,6 +286,15 @@ def define_sun():
         "drivers/virt/gunyah/gunyah_loader.ko",
         "kernel/msm_sysstats.ko",
         "kernel/sched/walt/sched-walt.ko",
+        "kernel/sched/walt/sched-penalty.ko",
+        "kernel/oplus_cpu/sched/sched_assist/oplus_bsp_sched_assist.ko",
+        "kernel/oplus_cpu/uad/ua_cpu_ioctl.ko",
+        "kernel/oplus_cpu/sched/frame_boost/oplus_bsp_frame_boost.ko",
+        "kernel/oplus_cpu/cpufreq_bouncing/cpufreq_bouncing.ko",
+        "kernel/oplus_cpu/sched/sched_info/oplus_bsp_schedinfo.ko",
+        "kernel/oplus_cpu/sched/task_cpustats/oplus_bsp_task_cpustats.ko",
+        "kernel/oplus_cpu/sched/task_sched/oplus_bsp_task_sched.ko",
+        "kernel/oplus_cpu/oplus_overload/oplus_bsp_task_overload.ko",
         "kernel/trace/qcom_ipc_logging.ko",
         "net/mac80211/mac80211.ko",
         "net/qrtr/qrtr.ko",
@@ -285,7 +305,52 @@ def define_sun():
         "net/wireless/cfg80211.ko",
         "sound/soc/codecs/snd-soc-hdmi-codec.ko",
         "sound/usb/snd-usb-audio-qmi.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/oplusboot.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/oplus_ftm_mode.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/buildvariant.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/cdt_integrity.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/oplus_charger_present.ko",
+        "drivers/soc/oplus/boot/oplus_projectinfo/oplus_bsp_boot_projectinfo.ko",
+        "drivers/soc/oplus/boot/bootmode/boot_mode.ko",
+        "drivers/soc/oplus/boot/bootloader_log/bootloader_log.ko",
+        "drivers/soc/oplus/boot/htb/tango32.ko",
+        "drivers/soc/oplus/device_info/device_info.ko",
+        "drivers/soc/oplus/storage/common/io_metrics/oplus_bsp_storage_io_metrics.ko",
+        "drivers/soc/oplus/dft/common/olc/olc.ko",
+        "drivers/soc/oplus/dft/common/feedback/kernel_fb.ko",
+        "drivers/base/kernelFwUpdate/oplus_bsp_fw_update.ko",
+        "drivers/base/touchpanel_notify/oplus_bsp_tp_notify.ko",
+        "drivers/soc/oplus/storage/common/ufs_oplus_dbg/ufs-oplus-dbg.ko",
+        "drivers/soc/oplus/storage/common/storage_log/oplus_storage_log.ko",
+        "drivers/soc/oplus/storage/common/oplus_uprobe/oplus_uprobe.ko",
+        "drivers/soc/oplus/storage/common/oplus_f2fslog_storage/oplus_f2fslog_storage.ko",
+        "drivers/soc/oplus/storage/common/wq_dynamic_priority/oplus_wq_dynamic_priority.ko",
+        #ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
+        "drivers/soc/oplus/multimedia/oplus_mm_kevent.ko",
+        "drivers/soc/oplus/multimedia/oplus_mm_kevent_fb.ko",
+        #endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+#ifdef OPLUS_TRACKPOINT_REPORT
+        "drivers/soc/oplus/trackpoint/oplus_trackpoint_report.ko",
+#endif /* OPLUS_TRACKPOINT_REPORT */
+        "drivers/soc/oplus/mdmrst/oplus_mdmrst.ko",
+        "drivers/soc/oplus/fpga_notify/oplus_bsp_fpga_notify.ko",
+        "drivers/soc/oplus/power/subsys_sleep_monitor/oplus_subsys_sleep_monitor.ko",
+        "drivers/base/magtransfer/oplus_magcvr_notify.ko",
+        "mm/mm_osvelte/oplus_bsp_mm_osvelte.ko",
+        "kernel/oplus_cpu/waker_identify/oplus_bsp_waker_identify.ko",
     ]
+
+    # Updated for kernel modules that are dynamically loaded based on environment variables
+    # 为根据环境变量而动态加载的内核模块而更新
+    _bsp_drv_inject_in_tree_modules = [
+        # keep sorted
+        # "drivers/power/oplus/debug-kit/debug-kit.ko",
+    ]
+
+    features = _get_oplus_features()
+    key = 'OPLUS_FEATURE_BSP_DRV_INJECT_TEST'
+    if features.get(key, '0').upper() in ['1', 'TRUE']:
+        _sun_in_tree_modules += _bsp_drv_inject_in_tree_modules
 
     _sun_consolidate_in_tree_modules = _sun_in_tree_modules + [
         # keep sorted

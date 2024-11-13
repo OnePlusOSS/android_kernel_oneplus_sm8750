@@ -442,6 +442,15 @@ config QSEE_IPC_IRQ_BRIDGE
 	  userspace. The interrupt will be propagated through a character device
 	  that userspace clients can poll on.
 
+config QCOM_GLINK
+	tristate "GLINK Probe Helper"
+	depends on RPMSG_QCOM_GLINK_SMEM
+	help
+	  This enables the GLINK Probe module. This is designed to set up
+	  other edges in the system. It will initialize all the transports for
+	  all the edges present in the device.
+	  Say M if you want to enable this module.
+
 config QTI_SYS_PM_VX
 	tristate "Qualcomm Technologies, Inc. (QTI) System PM Violators driver"
 	depends on QCOM_AOSS_QMP
@@ -558,7 +567,7 @@ config QCOM_WATCHDOG_BARK_TIME
 	depends on QCOM_WDT_CORE
 	int "Qualcomm Technologies, Inc. Watchdog bark time in ms"
 	default 11000
-	range 11000 11000
+	range 11000 22000
 	help
 	  The amount of time, in milliseconds, that should elapse after
 	  a watchdog timer reset before a bark interrupt is sent from the
@@ -914,6 +923,18 @@ config MINIDUMP_MAX_ENTRIES
 	help
 	  This defines maximum number of entries to be allocated for application
 	  subsytem in Minidump table.
+
+config OPLUS_POWERINFO_RPMH
+	bool "powerinfo rpmh config"
+	default n
+	help
+	  Select this config to enable powerinfo rpmh
+
+config OPLUS_POWERINFO_STANDBY_DEBUG
+	bool "powerinfo standby config"
+	default n
+	help
+	  Select this config to enable powerinfo standby debug
 
 config QCOM_HUNG_TASK_ENH
         tristate "QTI Hung Task Enhancement"

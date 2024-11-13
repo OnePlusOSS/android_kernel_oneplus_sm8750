@@ -87,10 +87,6 @@
   mntget
   __mod_lruvec_state
   __mod_zone_page_state
-  mount_nodev
-  memcg_kmem_online_key
-  neigh_xmit
-  netif_receive_skb_core
   __netif_schedule
   nf_ct_attach
   nf_ct_delete
@@ -98,28 +94,14 @@
   nf_register_net_hooks
   nf_unregister_net_hook
   nf_unregister_net_hooks
-  nla_find
-  nla_memcpy
-  __nla_parse
-  nla_put
-  nla_put_64bit
-  nla_reserve
-  nla_reserve_64bit
   noop_qdisc
-  nop_mnt_idmap
-  notify_change
   nr_running
   of_css
   osq_lock
   osq_unlock
   override_creds
   __page_file_index
-  path_get
   pfifo_qdisc_ops
-  platform_device_add
-  platform_device_alloc
-  platform_device_put
-  platform_driver_unregister
   pm_get_active_wakeup_sources
   prepare_creds
   prepare_to_wait_exclusive
@@ -299,6 +281,7 @@
   __traceiter_android_vh_show_mapcount_pages
   __traceiter_android_vh_show_stack_hash
   __traceiter_android_vh_shrink_slab_bypass
+  __traceiter_android_vh_tune_swappiness
   __traceiter_android_vh_si_mem_available_adjust
   __traceiter_android_vh_si_meminfo_adjust
   __traceiter_android_vh_sync_txn_recvd
@@ -307,7 +290,6 @@
   __traceiter_android_vh_tick_nohz_idle_stop_tick
   __traceiter_android_vh_tune_mmap_readaround
   __traceiter_android_vh_tune_scan_type
-  __traceiter_android_vh_tune_swappiness
   __traceiter_android_vh_unreserve_highatomic_bypass
   __traceiter_android_vh_update_page_mapcount
   __traceiter_block_bio_queue
@@ -423,6 +405,7 @@
   __tracepoint_android_vh_record_rtmutex_lock_starttime
   __tracepoint_android_vh_record_rwsem_lock_starttime
   __tracepoint_android_vh_reweight_entity
+  __tracepoint_android_vh_rtmutex_wait_start
   __tracepoint_android_vh_rmqueue_bulk_bypass
   __tracepoint_android_vh_rt_mutex_steal
   __tracepoint_android_vh_rtmutex_waiter_prio
@@ -448,11 +431,9 @@
   __tracepoint_android_vh_si_mem_available_adjust
   __tracepoint_android_vh_si_meminfo_adjust
   __tracepoint_android_vh_sync_txn_recvd
-  __tracepoint_android_vh_task_blocks_on_rtmutex
   __tracepoint_android_vh_test_clear_look_around_ref
   __tracepoint_android_vh_tick_nohz_idle_stop_tick
   __tracepoint_android_vh_tune_mmap_readaround
-  __tracepoint_android_vh_tune_scan_type
   __tracepoint_android_vh_tune_swappiness
   __tracepoint_android_vh_unreserve_highatomic_bypass
   __tracepoint_android_vh_update_page_mapcount
@@ -506,7 +487,16 @@
   wait_for_completion_killable_timeout
   wakeup_source_remove
   wake_up_state
+  __tracepoint_android_vh_tune_scan_type
   wq_worker_comm
+  get_slabinfo
+  on_each_cpu_cond_mask
+  stack_depot_fetch
+  memcg_kmem_online_key
+  stack_depot_print
+  filp_open_block
+  __traceiter_android_vh_vmscan_kswapd_done
+  __tracepoint_android_vh_vmscan_kswapd_done
   xt_register_match
   xt_unregister_match
   zero_pfn

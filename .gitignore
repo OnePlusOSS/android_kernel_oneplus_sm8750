@@ -176,3 +176,25 @@ sphinx_*/
 
 # Rust analyzer configuration
 /rust-project.json
+
+drivers/android/oplus_binder
+drivers/base/kernelFwUpdate
+drivers/base/touchpanel_notify
+drivers/dma-buf/heaps/mm_boost_pool
+drivers/input/oplus_secure_drivers
+drivers/misc/vibrator
+drivers/power/oplus
+drivers/soc/oplus/
+include/linux/cpufreq_bouncing.h
+include/linux/oplus_omrg.h
+include/linux/pogo_common.h
+include/linux/task_overload.h
+include/soc/oplus/
+include/trace/events/oplus_omrg_trace.h
+kernel/locking/locking_main.h
+kernel/locking/oplus_locking
+kernel/locking/oplus_locking.c
+kernel/locking/sa_common_struct.h
+kernel/oplus_cpu
+mm/mm_osvelte
+drivers/base/magtransfer

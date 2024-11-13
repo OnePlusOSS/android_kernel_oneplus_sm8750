@@ -69,4 +69,7 @@ obj-$(CONFIG_TPS6594_ESM)	+= tps6594-esm.o
 obj-$(CONFIG_TPS6594_PFSM)	+= tps6594-pfsm.o
 obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
 obj-$(CONFIG_QSEECOM_PROXY) 	+= qseecom_proxy.o
+#ifdef OPLUS_FEATURE_CHG_BASIC
+obj-$(CONFIG_HAPTIC_FEEDBACK) += vibrator/aw8697_haptic/
+#endif
 obj-$(CONFIG_PKVM_SMC_FILTER)  += pkvm-smc/

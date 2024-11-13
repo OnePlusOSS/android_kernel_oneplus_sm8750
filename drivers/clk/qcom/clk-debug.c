@@ -22,12 +22,34 @@
 #include "clk-debug.h"
 #include "gdsc-debug.h"
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+#include <linux/proc_fs.h>
+#include "common.h"
+#endif
+
 static struct clk_hw *measure;
 static bool debug_suspend;
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static bool debug_suspend_atomic = true;
+#else
 static bool debug_suspend_atomic;
+#endif
 static bool qcom_clk_debug_inited;
 static struct dentry *clk_debugfs_suspend;
 static struct dentry *clk_debugfs_suspend_atomic;
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static unsigned int debug_suspend_flag;
+static unsigned int suspend_clk_cnt;
+
+struct suspend_enabled_clk {
+	struct list_head list;
+	const char *clk_name;
+	unsigned int clk_rate;
+};
+
+static LIST_HEAD(suspend_clk_list);
+#endif
 
 struct hw_debug_clk {
 	struct list_head	list;
@@ -52,6 +74,10 @@ static LIST_HEAD(clk_hw_debug_mux_list);
 #define XO_DIV4_TERM_CNT_MASK	GENMASK(19, 0)
 #define MEASURE_CNT		GENMASK(24, 0)
 #define CBCR_ENA		BIT(0)
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+#define SUSPEND_CLK_MAX         50
+#endif
 
 static int _clk_runtime_get_debug_mux(struct clk_debug_mux *mux, bool get)
 {
@@ -503,10 +529,46 @@ void clk_debug_measure_add(struct clk_hw *hw, struct dentry *dentry)
 }
 EXPORT_SYMBOL(clk_debug_measure_add);
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static int clk_debug_measure_show(struct seq_file *seq_filp, void *v)
+{
+	u64 val;
+	struct clk_hw *hw = (struct clk_hw *)pde_data(file_inode(seq_filp->file));
+
+	clk_debug_measure_get(hw, &val);
+	seq_printf(seq_filp, "%lld\n", val);
+
+	return 0;
+}
+
+static int clk_debug_measure_add_proc_open(struct inode *inode, struct file *file)
+{
+	int ret;
+
+	ret = single_open(file, clk_debug_measure_show, NULL);
+
+	return ret;
+}
+
+static const struct proc_ops clk_measure_proc_fops = {
+	.proc_open		= clk_debug_measure_add_proc_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= single_release,
+};
+#endif
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static struct proc_dir_entry *clk_proc;
+#endif
 
 int devm_clk_register_debug_mux(struct device *pdev, struct clk_debug_mux *mux)
 {
 	struct clk *clk;
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	struct proc_dir_entry *clk_measure;
+#endif
 
 	if (!mux)
 		return -EINVAL;
@@ -518,6 +580,11 @@ int devm_clk_register_debug_mux(struct device *pdev, struct clk_debug_mux *mux)
 	mutex_lock(&clk_debug_lock);
 	list_add(&mux->list, &clk_hw_debug_mux_list);
 	mutex_unlock(&clk_debug_lock);
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	clk_measure = proc_mkdir(qcom_clk_hw_get_name(&mux->hw), clk_proc);
+	proc_create_data("clk_measure", 0444, clk_measure, &clk_measure_proc_fops, &mux->hw);
+#endif
 
 	return 0;
 }
@@ -814,6 +881,9 @@ static int clock_debug_print_clock(struct hw_debug_clk *dclk, struct seq_file *s
 	bool clk_prepared, clk_enabled;
 	int vdd_level = 0;
 	bool atomic;
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	struct suspend_enabled_clk *suspend_clk = NULL;
+#endif
 
 	if (!dclk || !dclk->clk_hw) {
 		pr_err("clk param error\n");
@@ -846,6 +916,19 @@ static int clock_debug_print_clock(struct hw_debug_clk *dclk, struct seq_file *s
 		} else {
 			clk_rate = clk_hw_get_rate(clk_hw);
 		}
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+		if ((!s) && (clk_rate > 0) && (suspend_clk_cnt < SUSPEND_CLK_MAX)) {
+			suspend_clk = kzalloc(sizeof(struct suspend_enabled_clk), GFP_ATOMIC);
+			if (suspend_clk) {
+				suspend_clk->clk_name = clk_hw_get_name(clk_hw);
+				suspend_clk->clk_rate = clk_rate;
+
+				list_add(&suspend_clk->list, &suspend_clk_list);
+				suspend_clk_cnt++;
+			}
+		}
+#endif
 
 		if (s) {
 			/*
@@ -896,6 +979,20 @@ static int clock_debug_print_clock(struct hw_debug_clk *dclk, struct seq_file *s
 	return 1;
 }
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+void reinit_suspend_enabled_clocks(void)
+{
+	struct suspend_enabled_clk *suspend_clk, *clk_temp;
+
+	list_for_each_entry_safe(suspend_clk, clk_temp, &suspend_clk_list, list) {
+		list_del(&suspend_clk->list);
+		kfree(suspend_clk);
+	}
+
+	suspend_clk_cnt = 0;
+}
+#endif
+
 /*
  * clock_debug_print_enabled_clocks() - Print names of enabled clocks
  */
@@ -905,6 +1002,11 @@ static void clock_debug_print_enabled_clocks(struct seq_file *s)
 	int cnt = 0;
 
 	clock_debug_output(s, "Enabled clocks:\n");
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	if (!s)
+		reinit_suspend_enabled_clocks();
+#endif
 
 	list_for_each_entry(dclk, &clk_hw_debug_list, list)
 		cnt += clock_debug_print_clock(dclk, s);
@@ -938,6 +1040,15 @@ static const struct file_operations clk_enabled_list_fops = {
 	.llseek		= seq_lseek,
 	.release	= seq_release,
 };
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static const struct proc_ops clk_enabled_list_proc_fops = {
+	.proc_open		= enabled_clocks_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= seq_release,
+};
+#endif
 
 static int clock_debug_trace(struct seq_file *s, void *unused)
 {
@@ -1087,6 +1198,89 @@ int clk_hw_debug_register(struct device *dev, struct clk_hw *clk_hw)
 }
 EXPORT_SYMBOL(clk_hw_debug_register);
 
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static ssize_t debug_suspend_write(struct file *filp,
+		const char __user *buff, size_t len, loff_t *data)
+{
+	char buf[10] = {0};
+	int ret = 0;
+
+	if (len > sizeof(buf))
+		return -EFAULT;
+
+	if (copy_from_user((char *)buf, buff, len))
+		return -EFAULT;
+
+	if (kstrtouint(buf, sizeof(buf), &debug_suspend_flag))
+		return -EINVAL;
+	/*
+	 *Now we only support 0,1,2,3 levels
+	 */
+	if (debug_suspend_flag > 3)
+		debug_suspend_flag = 0;
+
+	if (debug_suspend_flag == 1)
+		ret = register_trace_suspend_resume(
+			clk_debug_suspend_trace_probe, NULL);
+	else if (debug_suspend_flag == 0)
+		ret = unregister_trace_suspend_resume(
+			clk_debug_suspend_trace_probe, NULL);
+	if (ret)
+		pr_err("%s: Failed to %sregister suspend trace callback, ret=%d\n",
+			__func__, debug_suspend_flag ? "" : "un", ret);
+
+	return len;
+}
+
+static int debug_suspend_show(struct seq_file *seq_filp, void *v)
+{
+	seq_printf(seq_filp, "%d\n", debug_suspend_flag);
+	return 0;
+}
+
+static int debug_suspend_open(struct inode *inode, struct file *file)
+{
+	int ret;
+
+	ret = single_open(file, debug_suspend_show, NULL);
+
+	return ret;
+}
+
+static const struct proc_ops debug_suspend_fops = {
+	.proc_open		= debug_suspend_open,
+	.proc_write		= debug_suspend_write,
+	.proc_read		= seq_read,
+};
+#endif
+
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+static int suspend_enabled_clocks_show(struct seq_file *s, void *unused)
+{
+
+	struct suspend_enabled_clk *suspend_clk;
+
+	list_for_each_entry(suspend_clk, &suspend_clk_list, list) {
+		seq_printf(s, "%s: [%u]\n", suspend_clk->clk_name, suspend_clk->clk_rate);
+	}
+
+	return 0;
+}
+
+static int suspend_enabled_clocks_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, suspend_enabled_clocks_show, inode->i_private);
+}
+
+static const struct proc_ops suspend_enabled_clocks_fops = {
+	.proc_open		= suspend_enabled_clocks_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= seq_release,
+};
+#endif
+
 int clk_debug_init(void)
 {
 	static struct dentry *rootdir;
@@ -1126,6 +1320,13 @@ int clk_debug_init(void)
 		pr_err("%s: unable to create clock debug_suspend_atomic debugfs directory, ret=%d\n",
 			__func__, ret);
 	}
+
+#ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
+	clk_proc = proc_mkdir("clk", NULL);
+	proc_create("clk_enabled_list", 0444, clk_proc, &clk_enabled_list_proc_fops);
+	proc_create("debug_suspend", 0664, clk_proc, &debug_suspend_fops);
+	proc_create("suspend_enabled_clocks", 0444, clk_proc, &suspend_enabled_clocks_fops);
+#endif
 
 	return ret;
 }

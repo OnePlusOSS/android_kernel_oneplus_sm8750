@@ -4,7 +4,10 @@ obj-$(CONFIG_DMABUF_HEAPS_PAGE_POOL)	+= page_pool.o
 obj-$(CONFIG_DMABUF_HEAPS_SYSTEM)	+= system_heap.o
 obj-$(CONFIG_DMABUF_HEAPS_CMA)		+= cma_heap.o
 obj-$(CONFIG_QCOM_DMABUF_HEAPS)		+= qcom_dma_heaps.o
+
+ccflags-y  += -I$(srctree)/mm/mm_osvelte/
 qcom_dma_heaps-y			:= qcom_dma_heap.o qcom_dt_parser.o qcom_sg_ops.o
+qcom_dma_heaps-$(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL) += ./mm_boost_pool/oplus_boost_pool.o
 qcom_dma_heaps-$(CONFIG_QCOM_DMABUF_HEAPS_SYSTEM) += qcom_system_heap.o \
 						     qcom_dynamic_page_pool.o
 qcom_dma_heaps-$(CONFIG_QCOM_DMABUF_HEAPS_SYSTEM_SECURE) += qcom_secure_system_heap.o \

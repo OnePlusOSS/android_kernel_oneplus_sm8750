@@ -42,6 +42,9 @@ DECLARE_HOOK(android_vh_binder_trans,
 	TP_PROTO(struct binder_proc *target_proc, struct binder_proc *proc,
 		struct binder_thread *thread, struct binder_transaction_data *tr),
 	TP_ARGS(target_proc, proc, thread, tr));
+DECLARE_HOOK(android_vh_binder_wakeup_ilocked,
+	TP_PROTO(struct task_struct *task, bool sync, struct binder_proc *proc),
+	TP_ARGS(task, sync, proc));
 DECLARE_HOOK(android_vh_binder_wait_for_work,
 	TP_PROTO(bool do_proc_work, struct binder_thread *tsk, struct binder_proc *proc),
 	TP_ARGS(do_proc_work, tsk, proc));
@@ -93,7 +96,7 @@ DECLARE_HOOK(android_vh_binder_spawn_new_thread,
 	TP_ARGS(thread, proc, force_spawn));
 DECLARE_HOOK(android_vh_binder_has_special_work_ilocked,
 	TP_PROTO(struct binder_thread *thread, bool do_proc_work, bool *has_work),
-	TP_ARGS(thread, do_proc_work, has_work));
+	TP_ARGS(thread, do_proc_work, has_work)); 
 DECLARE_HOOK(android_vh_binder_proc_transaction,
 	TP_PROTO(struct task_struct *caller_task, struct task_struct *binder_proc_task,
 		struct task_struct *binder_th_task, int node_debug_id,

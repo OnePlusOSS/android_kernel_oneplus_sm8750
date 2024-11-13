@@ -53,7 +53,36 @@ struct wcd_usbss_ctxt {
 	bool suspended;
 	bool defer_writes;
 	int req_state;
+//#ifdef OPLUS_ARCH_EXTENDS
+/* Checking whether the surge occurs */
+	struct workqueue_struct *check_surge_workqueue;
+	struct delayed_work check_surge_delaywork;
+	bool is_standby_support;
+	bool usb_sbu_compliance;
+//#endif /* OPLUS_ARCH_EXTENDS */
+//#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
+	bool sdam_handler;
+//#endif /*CONFIG_OPLUS_FEATURE_MM_FEEDBACK*/
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	struct mutex noti_lock;
+	struct notifier_block chg_nb;
+	bool chg_registration;
+#endif
 };
+
+#ifdef OPLUS_FEATURE_CHG_BASIC
+enum TYPEC_AUDIO_SWITCH_STATE {
+	TYPEC_AUDIO_SWITCH_STATE_DPDM          = 0x0,
+	TYPEC_AUDIO_SWITCH_STATE_FAST_CHG      = 0x1,
+	TYPEC_AUDIO_SWITCH_STATE_AUDIO         = 0x1 << 1,
+	TYPEC_AUDIO_SWITCH_STATE_UNKNOW        = 0x1 << 2,
+	TYPEC_AUDIO_SWITCH_STATE_SUPPORT       = 0x1 << 4,
+	TYPEC_AUDIO_SWITCH_STATE_NO_RAM,
+	TYPEC_AUDIO_SWITCH_STATE_I2C_ERR       = 0x1 << 8,
+	TYPEC_AUDIO_SWITCH_STATE_INVALID_PARAM = 0x1 << 9,
+	TYPEC_AUDIO_SWITCH_STATE_STANDBY       = 0x1 << 10,
+};
+#endif
 
 extern struct regmap *wcd_usbss_regmap_init(struct device *dev,
 				   const struct regmap_config *config);

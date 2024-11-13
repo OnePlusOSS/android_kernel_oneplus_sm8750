@@ -47,6 +47,17 @@ append_cmd POST_DEFCONFIG_CMDS 'sanity_check_abi'
 function build_defconfig_fragments() {
 	if [[ "${VARIANT}" =~ ^(perf|consolidate)$ ]]; then
 		apply_defconfig_fragment ${KERNEL_DIR}/arch/${ARCH}/configs/vendor/${MSM_ARCH}_perf.config vendor/${MSM_ARCH}-perf_defconfig
+
+		if [ "${OPLUS_FEATURE_BSP_DRV_INJECT_TEST}" = "1" ]; then
+			apply_defconfig_fragment ${KERNEL_DIR}/kernel/configs/bsp_inject_test.config
+			echo "Add: bsp_inject_test.config added"
+		elif [ "${OPLUS_FEATURE_BSP_DRV_INJECT_TEST^^}" = "TRUE" ]; then
+			apply_defconfig_fragment ${KERNEL_DIR}/kernel/configs/bsp_inject_test.config
+			echo "Add: bsp_inject_test.config added"
+		else
+			echo "Add: bsp_inject_test.config not added, OPLUS_FEATURE_BSP_DRV_INJECT_TEST:${OPLUS_FEATURE_BSP_DRV_INJECT_TEST}"
+		fi
+
 		if [ "${VARIANT}" = perf ]; then
 			return
 		fi

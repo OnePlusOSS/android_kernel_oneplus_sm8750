@@ -803,7 +803,7 @@ static int tpda_probe(struct amba_device *adev, const struct amba_id *id)
 	if (!IS_ERR(drvdata->dclk)) {
 		ret = clk_prepare_enable(drvdata->dclk);
 		if (ret)
-			return ret;
+            return ret == -ETIMEDOUT ? -EPROBE_DEFER : ret;
 	} else
 		drvdata->dclk = NULL;
 
