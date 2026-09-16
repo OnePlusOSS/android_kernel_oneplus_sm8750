@@ -1808,6 +1808,9 @@ static void aw210xx_set_brightness(struct led_classdev *cdev,
 		}
 	}
 
+	if (brightness == 0) {
+		cancel_work_sync(&aw210xx->brightness_work);
+	}
 	schedule_work(&aw210xx->brightness_work);
 }
 

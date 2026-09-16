@@ -48,6 +48,7 @@
 #include <ufs/ufshci.h>
 #include <ufs/ufs_quirks.h>
 #include <ufs/ufshcd-crypto-qti.h>
+#include <soc/qcom/socinfo.h>
 
 #define MCQ_QCFGPTR_MASK	GENMASK(7, 0)
 #define MCQ_QCFGPTR_UNIT	0x200
@@ -72,6 +73,11 @@
 
 #define UFS_QCOM_BER_TH_DEF_G1_G4	0
 #define UFS_QCOM_BER_TH_DEF_G5	3
+
+
+#define UFS_8750_CPU_FREQ_MAX_PRIME  3072000
+
+#define SOCINFO_8750  618
 /*
  * Default time window of PHY BER monitor in millisecond.
  * Can be overridden by MODULE CmdLine and MODULE sysfs node.
@@ -3116,6 +3122,11 @@ static int ufs_qcom_setup_qos(struct ufs_hba *hba)
 		}
 		host->cpu_info[i].min_cpu_scale_freq = policy->cpuinfo.min_freq;
 		host->cpu_info[i].max_cpu_scale_freq = policy->cpuinfo.max_freq;
+		//cut down ufs driving boost cpufreq on 8750, G core to 3.0G
+		if (SOCINFO_8750 == socinfo_get_id()){
+			if (policy->cpu == 6)
+				host->cpu_info[i].max_cpu_scale_freq = UFS_8750_CPU_FREQ_MAX_PRIME;
+		}
 		cpufreq_cpu_put(policy);
 	}
 
