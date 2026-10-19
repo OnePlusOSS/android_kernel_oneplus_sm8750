@@ -128,6 +128,8 @@
   __traceiter_android_vh_blk_mq_kick_requeue_list
   __traceiter_android_vh_build_skb_around
   __traceiter_android_vh_cgroup_attach
+  __traceiter_android_vh_cpuset_attach_task
+  __traceiter_android_vh_cpuset_css_online
   __traceiter_android_vh_check_folio_look_around_ref
   __traceiter_android_vh_check_nanosleep_syscall
   __traceiter_android_vh_clear_rwsem_reader_owned
@@ -143,6 +145,7 @@
   __traceiter_android_vh_dup_task_struct
   __traceiter_android_vh_f2fs_file_open
   __traceiter_android_vh_f2fs_ra_op_flags
+  __traceiter_android_vh_fas_gpu_qos_update_tracer
   __traceiter_android_vh_filemap_fault_folio_locked
   __traceiter_android_vh_filemap_read_end
   __traceiter_android_vh_filemap_update_page
@@ -162,6 +165,7 @@
   __traceiter_android_vh_look_around_migrate_folio
   __traceiter_android_vh_lruvec_add_folio
   __traceiter_android_vh_lruvec_del_folio
+  __traceiter_android_vh_mempool_alloc_skip_wait
   __traceiter_android_vh_mm_customize_ac
   __traceiter_android_vh_mm_customize_file_is_tiny
   __traceiter_android_vh_mm_customize_lru_add_dst
@@ -277,6 +281,8 @@
   __tracepoint_android_vh_blk_mq_kick_requeue_list
   __tracepoint_android_vh_build_skb_around
   __tracepoint_android_vh_cgroup_attach
+  __tracepoint_android_vh_cpuset_attach_task
+  __tracepoint_android_vh_cpuset_css_online
   __tracepoint_android_vh_check_folio_look_around_ref
   __tracepoint_android_vh_check_nanosleep_syscall
   __tracepoint_android_vh_clear_rwsem_reader_owned
@@ -292,6 +298,7 @@
   __tracepoint_android_vh_dup_task_struct
   __tracepoint_android_vh_f2fs_file_open
   __tracepoint_android_vh_f2fs_ra_op_flags
+  __tracepoint_android_vh_fas_gpu_qos_update_tracer
   __tracepoint_android_vh_filemap_fault_folio_locked
   __tracepoint_android_vh_filemap_read_end
   __tracepoint_android_vh_filemap_update_page
@@ -310,6 +317,7 @@
   __tracepoint_android_vh_look_around_migrate_folio
   __tracepoint_android_vh_lruvec_add_folio
   __tracepoint_android_vh_lruvec_del_folio
+  __tracepoint_android_vh_mempool_alloc_skip_wait
   __tracepoint_android_vh_mm_customize_ac
   __tracepoint_android_vh_mm_customize_file_is_tiny
   __tracepoint_android_vh_mm_customize_lru_add_dst

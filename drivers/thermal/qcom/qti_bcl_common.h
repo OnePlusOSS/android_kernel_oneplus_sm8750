@@ -109,6 +109,8 @@ struct bcl_device {
 	int				dynamic_vbat_config_count;
 	struct notifier_block		psy_nb;
 	struct work_struct		vbat_check_work;
+	int				vbat_pre_range;
+	int				vbat_pre_temp;
 #endif
 };
 

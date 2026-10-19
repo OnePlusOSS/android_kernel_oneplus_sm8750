@@ -581,13 +581,10 @@ static irqreturn_t tcs_tx_done(int irq, void *p)
 		ipc_log_string(drv->ipc_log_ctx, "IRQ response: m=%d", i);
 #endif
 
-		/*
-		 * If wake tcs was re-purposed for sending active
-		 * votes, clear AMC trigger & enable modes and
+		/* Clear AMC trigger & enable modes and
 		 * disable interrupt for this TCS
 		 */
-		if (!drv->ch[ch].tcs[ACTIVE_TCS].num_tcs)
-			__tcs_set_trigger(drv, i, false);
+		__tcs_set_trigger(drv, i, false);
 skip:
 		/* Reclaim the TCS */
 		write_tcs_reg(drv, drv->regs[RSC_DRV_CMD_ENABLE], i, 0);
@@ -1789,6 +1786,11 @@ static int rpmh_rsc_probe(struct platform_device *pdev)
 		ret = of_property_read_u32(np, "qcom,drv-id", &i);
 		if (ret)
 			return ret;
+
+		if (drv->ver.major >= 3)
+			drv->regs = rpmh_rsc_reg_offset_ver_3_0;
+		else
+			drv->regs = rpmh_rsc_reg_offset_ver_2_7;
 
 		scnprintf(drv[i].name, sizeof(drv[i].name), "%s-drv-%d", name, i);
 

@@ -69,6 +69,8 @@
 #define SUN6I_NR_DIRECT_IRQS		16
 #define SUN6I_NR_MUX_BITS		128
 
+#define MAX(a, b) __cmp(max, a, b)
+
 struct sun6i_r_intc_variant {
 	u32		first_mux_irq;
 	u32		nr_mux_irqs;
@@ -270,7 +272,7 @@ static const struct irq_domain_ops sun6i_r_intc_domain_ops = {
 
 static int sun6i_r_intc_suspend(void)
 {
-	u32 buf[BITS_TO_U32(max(SUN6I_NR_TOP_LEVEL_IRQS, SUN6I_NR_MUX_BITS))];
+	u32 buf[BITS_TO_U32(MAX(SUN6I_NR_TOP_LEVEL_IRQS, SUN6I_NR_MUX_BITS))];
 	int i;
 
 	/* Wake IRQs are enabled during system sleep and shutdown. */

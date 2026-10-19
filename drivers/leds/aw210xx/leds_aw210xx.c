@@ -1773,7 +1773,21 @@ static void aw210xx_brightness_work(struct work_struct *work)
 {
 	struct aw210xx *aw210xx = container_of(work, struct aw210xx,
 			brightness_work);
+	int i = 0;
 
+	/*
+	 * Cancel/drain all breath_work before this brightness run so a delayed
+	 * 0x81 (ABMGO) cannot run concurrently with or after schedule but before
+	 * the new config. Complements mutex in breath_func / aw210xx_brightness.
+	 * Do not flush_work() sibling brightness_work here: parallel R/G/B
+	 * brightness_work could deadlock if each flushes the others.
+	 */
+	if (aw210xx_glo && max_led > 0) {
+		for (i = 0; i < max_led; i++) {
+			cancel_delayed_work_sync(&aw210xx_glo[i].breath_work);
+		}
+		AW_LOG("cancel_delayed_work_sync breath_work enter\n");
+	}
 	AW_LOG("aw210xx_brightness_work enter\n");
 	aw210xx_brightness(aw210xx);
 }
@@ -1794,6 +1808,9 @@ static void aw210xx_set_brightness(struct led_classdev *cdev,
 		}
 	}
 
+	if (brightness == 0) {
+		cancel_work_sync(&aw210xx->brightness_work);
+	}
 	schedule_work(&aw210xx->brightness_work);
 }
 

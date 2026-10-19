@@ -102,6 +102,7 @@
 #include <linux/iommu.h>
 #include <linux/tick.h>
 #include <linux/cpufreq_times.h>
+#include <linux/dma-buf.h>
 
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -116,6 +117,7 @@
 
 #undef CREATE_TRACE_POINTS
 #include <trace/hooks/sched.h>
+#include <trace/hooks/dtask.h>
 /*
  * Minimum number of threads to boot the kernel
  */
@@ -526,10 +528,6 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 	vma_numab_state_init(new);
 	dup_anon_vma_name(orig, new);
 
-	/* track_pfn_copy() will later take care of copying internal state. */
-	if (unlikely(new->vm_flags & VM_PFNMAP))
-		untrack_pfn_clear(new);
-
 	return new;
 }
 
@@ -727,6 +725,11 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 		tmp = vm_area_dup(mpnt);
 		if (!tmp)
 			goto fail_nomem;
+
+		/* track_pfn_copy() will later take care of copying internal state. */
+		if (unlikely(tmp->vm_flags & VM_PFNMAP))
+			untrack_pfn_clear(tmp);
+
 		retval = vma_dup_policy(mpnt, tmp);
 		if (retval)
 			goto fail_nomem_policy;
@@ -750,7 +753,7 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 
 			get_file(file);
 			i_mmap_lock_write(mapping);
-			if (tmp->vm_flags & VM_SHARED)
+			if (vma_is_shared_maywrite(tmp))
 				mapping_allow_writable(mapping);
 			flush_dcache_mmap_lock(mapping);
 			/* insert tmp into the share list, just after mpnt */
@@ -1001,6 +1004,10 @@ void __put_task_struct(struct task_struct *tsk)
 	WARN_ON(tsk == current);
 
 	sched_ext_free(tsk);
+	trace_android_vh_put_task(tsk);
+	put_dmabuf_info(tsk->dmabuf_info);
+
+
 	io_uring_free(tsk);
 	cgroup_free(tsk);
 	task_numa_free(tsk, true);
@@ -1172,6 +1179,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
 	clear_tsk_need_resched(tsk);
+	trace_android_vh_clear_curr_lazy(tsk);
 	set_task_stack_end_magic(tsk);
 	clear_syscall_work_syscall_user_dispatch(tsk);
 
@@ -1196,6 +1204,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	tsk->task_frag.page = NULL;
 	tsk->wake_q.next = NULL;
 	tsk->worker_private = NULL;
+	tsk->dmabuf_info = NULL;
 
 	kcov_task_init(tsk);
 	kmsan_task_create(tsk);
@@ -1384,6 +1393,7 @@ static inline void __mmput(struct mm_struct *mm)
 	exit_mmap(mm);
 	mm_put_huge_zero_page(mm);
 	set_mm_exe_file(mm, NULL);
+	put_dmabuf_info(mm->dmabuf_info);
 	if (!list_empty(&mm->mmlist)) {
 		spin_lock(&mmlist_lock);
 		list_del(&mm->mmlist);
@@ -1718,6 +1728,7 @@ static struct mm_struct *dup_mm(struct task_struct *tsk,
 		goto fail_nomem;
 
 	memcpy(mm, oldmm, sizeof(*mm));
+	mm->dmabuf_info = NULL;
 
 	if (!mm_init(mm, tsk, mm->user_ns))
 		goto fail_nomem;
@@ -1836,7 +1847,7 @@ static int copy_files(unsigned long clone_flags, struct task_struct *tsk,
 	return 0;
 }
 
-static int copy_sighand(unsigned long clone_flags, struct task_struct *tsk)
+static int copy_sighand(u64 clone_flags, struct task_struct *tsk)
 {
 	struct sighand_struct *sig;
 
@@ -2630,6 +2641,12 @@ __latent_entropy struct task_struct *copy_process(
 	p->rethooks.first = NULL;
 #endif
 
+	retval = copy_dmabuf_info(clone_flags, p);
+	if (retval) {
+		pr_err("failed to copy dmabuf accounting info, err %d\n", retval);
+		goto bad_fork_put_pidfd;
+	}
+
 	/*
 	 * Ensure that the cgroup subsystem policies allow the new process to be
 	 * forked. It should be noted that the new process's css_set can be changed
@@ -2638,7 +2655,7 @@ __latent_entropy struct task_struct *copy_process(
 	 */
 	retval = cgroup_can_fork(p, args);
 	if (retval)
-		goto bad_fork_put_pidfd;
+		goto bad_fork_cleanup_dmabuf;
 
 	/*
 	 * Now that the cgroups are pinned, re-clone the parent cgroup and put
@@ -2776,6 +2793,7 @@ __latent_entropy struct task_struct *copy_process(
 	uprobe_copy_process(p, clone_flags);
 	user_events_fork(p, clone_flags);
 
+	trace_android_vh_lock_task_fork(p);
 	copy_oom_score_adj(clone_flags, p);
 
 	return p;
@@ -2786,6 +2804,8 @@ bad_fork_core_free:
 	write_unlock_irq(&tasklist_lock);
 bad_fork_cancel_cgroup:
 	cgroup_cancel_fork(p, args);
+bad_fork_cleanup_dmabuf:
+	put_dmabuf_info(p->dmabuf_info);
 bad_fork_put_pidfd:
 	if (clone_flags & CLONE_PIDFD) {
 		fput(pidfile);
@@ -3575,6 +3595,17 @@ int unshare_files(void)
 	old = task->files;
 	task_lock(task);
 	task->files = copy;
+
+	/*
+	 * This is a new partial sharing relationship for task, since we have a new
+	 * files_struct (but the MM is still used). Since partial sharing is not
+	 * supported for dmabuf accounting, we need to remove the accounting info
+	 * from the task. Leave the mm->dmabuf_info so any existing accounting can
+	 * be unaccounted properly. The fixup for this new files_struct happens
+	 * externally with appropriate locking.
+	 */
+	put_dmabuf_info(task->dmabuf_info);
+	task->dmabuf_info = NULL;
 	task_unlock(task);
 	put_files_struct(old);
 	return 0;
